@@ -70,7 +70,7 @@ export type Input = LaneViewInput;
 
   <@step id="form-hypothesis" title="Form hypothesis" phrase="Names a specific mechanism" group="plan">
     <@what>
-      "defer X off the boot path because it blocks first paint", not "try memoizing something". For a perf metric, ordered by the Perf issue mantras.
+      "defer X off the boot path because it blocks first paint", not "try memoizing something". For a perf metric, ordered by the <playbook-ref of=pstack name="Perf issue" path="skills/poteto-mode/playbooks/perf-issue.md"/> mantras.
     </@what>
     <@actor>Main agent</@actor>
   </@step>
@@ -143,7 +143,7 @@ export type Input = LaneViewInput;
   </@step>
 
   <@step id="opening-a-pr" title="Opening a PR" phrase="Run the shared PR playbook" group="ship">
-    <@what>"Run Opening a PR." The accepted commits are stacked in the order they landed.</@what>
+    <@what>"Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>." The accepted commits are stacked in the order they landed.</@what>
     <@actor>Main agent</@actor>
     <@output>A ready (not draft) PR</@output>
     <@gate>None in code</@gate>

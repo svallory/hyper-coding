@@ -24,13 +24,13 @@ export type Input = LaneViewInput;
 
   <@step id="architect" title="Architect" phrase="The shape of the change" group="plan">
     <@what>
-      "architect for the shape." The architect skill runs an arena of competing designs.
+      "<skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> for the shape." The <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> skill runs an <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/> of competing designs.
     </@what>
     <@actor>Main agent</@actor>
     <@output>A chosen shape</@output>
 
     <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
-      Designs the shape of a change that crosses a function boundary. It runs arena.
+      Designs the shape of a change that crosses a function boundary. It runs <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/>.
     </@row>
     <@row kind="skill" name="arena" path="skills/arena/SKILL.md" by="model, named in this step">
       Several runners on different models build the same thing; a cross-judge picks.
@@ -56,7 +56,7 @@ export type Input = LaneViewInput;
   <@step id="delegate-build" title="Delegate build" phrase="Subagent, or arena for several shapes"
     group="build">
     <@what>
-      A subagent on the configured feature model gets file paths, the named data shape and success criteria. When the implementation admits several valid shapes, it goes through arena instead: "Mandatory: no skip-with-reason escape". Code-coupled work goes to a single owner.
+      A subagent on the configured feature model gets file paths, the named data shape and success criteria. When the implementation admits several valid shapes, it goes through <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/> instead: "Mandatory: no skip-with-reason escape". Code-coupled work goes to a single owner.
     </@what>
     <@actor>
       Main agent leads; a <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/> subagent writes
@@ -115,7 +115,7 @@ export type Input = LaneViewInput;
   </@step>
 
   <@step id="interrogate" title="Interrogate" phrase="Only if the design is contested" group="check">
-    <@what>"If the design is contested, interrogate before shipping."</@what>
+    <@what>"If the design is contested, <skill-ref of=pstack name="interrogate" path="skills/interrogate/SKILL.md"/> before shipping."</@what>
     <@actor>A panel of reviewers on different models</@actor>
 
     <@row kind="skill" name="interrogate" path="skills/interrogate/SKILL.md"
@@ -125,7 +125,7 @@ export type Input = LaneViewInput;
   </@step>
 
   <@step id="opening-a-pr" title="Opening a PR" phrase="Run the shared PR playbook" group="ship">
-    <@what>"Run Opening a PR."</@what>
+    <@what>"Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>."</@what>
     <@actor>Main agent</@actor>
     <@output>A ready (not draft) PR</@output>
     <@gate>None in code</@gate>

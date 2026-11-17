@@ -8,7 +8,7 @@ export type Input = LaneViewInput;
     "You own the diagnosis from the artifact." The capture already exists: "read it, don't re-run it."
   </@summary>
   <@order label="Ends with" lead="a diagnosis; no fix unless asked">
-    Reply: the artifact and format, the reduced finding, the source location, the artifact paths, and whether a paired capture confirmed it. "Route to Bug fix or Perf issue once the cause is known."
+    Reply: the artifact and format, the reduced finding, the source location, the artifact paths, and whether a paired capture confirmed it. "Route to <playbook-ref of=pstack name="Bug fix" path="skills/poteto-mode/playbooks/bug-fix.md"/> or <playbook-ref of=pstack name="Perf issue" path="skills/poteto-mode/playbooks/perf-issue.md"/> once the cause is known."
   </@order>
 
   <@step id="load-artifact" title="Load artifact" phrase="Identify the format; right tool" group="plan">

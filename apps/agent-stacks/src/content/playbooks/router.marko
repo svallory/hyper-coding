@@ -32,7 +32,7 @@ export type Input = LaneViewInput;
 
   <@step id="match-playbook" title="Match playbook" phrase="Model picks one of 22 titles" group="plan">
     <@what>
-      The 22 titles are one comma-separated sentence at the end of the skill. No trigger table, no keywords, no code. The Non-negotiables add a few direct routes: PR status goes to <playbook-ref of=pstack name="Babysit" path="skills/poteto-mode/playbooks/babysit.md"/>, landing a green stack goes to Shipping, a fork that running something would settle goes to Prototype.
+      The 22 titles are one comma-separated sentence at the end of the skill. No trigger table, no keywords, no code. The Non-negotiables add a few direct routes: PR status goes to <playbook-ref of=pstack name="Babysit" path="skills/poteto-mode/playbooks/babysit.md"/>, landing a green stack goes to <playbook-ref of=pstack name="Shipping" path="skills/poteto-mode/playbooks/shipping.md"/>, a fork that running something would settle goes to <playbook-ref of=pstack name="Prototype" path="skills/poteto-mode/playbooks/prototype.md"/>.
     </@what>
     <@actor>Main agent</@actor>
     <@input>The restated goal</@input>
@@ -103,7 +103,7 @@ export type Input = LaneViewInput;
   <@step id="opening-a-pr" title="Opening a PR" phrase="Last step of code-changing playbooks"
     group="ship">
     <@what>
-      Bug fix, Feature, Refactoring, Perf issue, Hillclimb, Visual parity and Authoring a skill end with "Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>".
+      <playbook-ref of=pstack name="Bug fix" path="skills/poteto-mode/playbooks/bug-fix.md"/>, <playbook-ref of=pstack name="Feature" path="skills/poteto-mode/playbooks/feature.md"/>, <playbook-ref of=pstack name="Refactoring" path="skills/poteto-mode/playbooks/refactoring.md"/>, <playbook-ref of=pstack name="Perf issue" path="skills/poteto-mode/playbooks/perf-issue.md"/>, <playbook-ref of=pstack name="Hillclimb" path="skills/poteto-mode/playbooks/hillclimb.md"/>, <playbook-ref of=pstack name="Visual parity" path="skills/poteto-mode/playbooks/visual-parity.md"/> and <playbook-ref of=pstack name="Authoring a skill" path="skills/poteto-mode/playbooks/authoring-a-skill.md"/> end with "Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>".
     </@what>
     <@actor>Main agent</@actor>
     <@output>A ready PR</@output>
@@ -131,7 +131,7 @@ export type Input = LaneViewInput;
   </@step>
 
   <@step id="shipping" title="Shipping" phrase="Only when asked to land" group="ship" human>
-    <@what>"Landing a green stack → the Shipping playbook."</@what>
+    <@what>"Landing a green stack → the <playbook-ref of=pstack name="Shipping" path="skills/poteto-mode/playbooks/shipping.md"/> playbook."</@what>
     <@actor>Main agent; non-author verifiers</@actor>
     <@output>Merged PRs up to the verified ceiling</@output>
     <@handoff to="shipping"/>
@@ -188,7 +188,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>model</@by>
     <@how>
-      Investigation, both forensics, Prototype, Eval, Multi-phase plan, Session pickup, Pause safely and Worktree cleanup end with a reply instead. <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> itself claims it is "Invoked at the end of every other playbook".
+      <playbook-ref of=pstack name="Investigation" path="skills/poteto-mode/playbooks/investigation.md"/>, both forensics, <playbook-ref of=pstack name="Prototype" path="skills/poteto-mode/playbooks/prototype.md"/>, <playbook-ref of=pstack name="Eval" path="skills/poteto-mode/playbooks/eval.md"/>, <playbook-ref of=pstack name="Multi-phase plan" path="skills/poteto-mode/playbooks/multi-phase-plan.md"/>, <playbook-ref of=pstack name="Session pickup" path="skills/poteto-mode/playbooks/session-pickup.md"/>, <playbook-ref of=pstack name="Pause safely" path="skills/poteto-mode/playbooks/pause-safely.md"/> and <playbook-ref of=pstack name="Worktree cleanup" path="skills/poteto-mode/playbooks/worktree-cleanup.md"/> end with a reply instead. <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> itself claims it is "Invoked at the end of every other playbook".
     </@how>
     <@bound>none stated</@bound>
     <@source>
@@ -200,7 +200,7 @@ export type Input = LaneViewInput;
     <@when>A human asks for the PR's status.</@when>
     <@by>human</@by>
     <@how>
-      "<playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> does not start a babysit." The exception is Autopilot-full, whose owners babysit their own PRs.
+      "<playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> does not start a babysit." The exception is <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/>, whose owners babysit their own PRs.
     </@how>
     <@bound>none stated</@bound>
     <@source>

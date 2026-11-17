@@ -43,7 +43,7 @@ export type Input = LaneViewInput;
   <@step id="spawn-candidates" title="Spawn candidates" phrase="N models, same prompt, parallel"
     group="build">
     <@what>
-      On different models, per the arena skill's Phase B. Each works in its own sanitized directory.
+      On different models, per the <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/> skill's Phase B. Each works in its own sanitized directory.
     </@what>
     <@actor>N candidate subagents</@actor>
 
@@ -59,7 +59,7 @@ export type Input = LaneViewInput;
   <@step id="blinded-judge" title="Blinded judge" phrase="Different model family, labels only"
     group="check">
     <@what>
-      One judge, per the arena skill's Phase C. It sees outputs by sanitized label and the rubric, never a model name. Two variants are scored by one judge in a single pass on one scale.
+      One judge, per the <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/> skill's Phase C. It sees outputs by sanitized label and the rubric, never a model name. Two variants are scored by one judge in a single pass on one scale.
     </@what>
     <@actor>One judge subagent</@actor>
     <@output>A verdict</@output>

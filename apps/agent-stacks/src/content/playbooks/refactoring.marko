@@ -40,14 +40,14 @@ export type Input = LaneViewInput;
 
   <@step id="target-shape" title="Target shape" phrase="Layout, types and call graph" group="plan">
     <@what>
-      What the module layout, types and call graph would be if built today. Across a function boundary: architect first.
+      What the module layout, types and call graph would be if built today. Across a function boundary: <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> first.
     </@what>
     <@actor>Main agent</@actor>
     <@handoff to="feature"/>
     <@handoff to="figure-it-out"/>
 
     <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
-      Designs the shape of a change that crosses a function boundary. It runs arena.
+      Designs the shape of a change that crosses a function boundary. It runs <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/>.
     </@row>
     <@row kind="skill" name="principle-foundational-thinking"
       path="skills/principle-foundational-thinking/SKILL.md"

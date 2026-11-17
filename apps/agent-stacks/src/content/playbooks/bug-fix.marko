@@ -35,7 +35,7 @@ export type Input = LaneViewInput;
   <@step id="find-cause" title="Find cause" phrase="Binary-search hypotheses with runtime evidence"
     group="plan">
     <@what>
-      Form the candidate hypotheses, then rule them out until one survives. Seed them with a trace of the subsystem and the why skill for regression history. "Each pass, take the split that cuts the most remaining problem space." A long hunt runs under <tool-ref name="/loop"/>.
+      Form the candidate hypotheses, then rule them out until one survives. Seed them with a trace of the subsystem and the <skill-ref of=pstack name="why" path="skills/why/SKILL.md"/> skill for regression history. "Each pass, take the split that cuts the most remaining problem space." A long hunt runs under <tool-ref name="/loop"/>.
     </@what>
     <@actor>Main agent; subagents investigate</@actor>
     <@output>One surviving mechanism, confirmed at runtime</@output>
@@ -54,12 +54,12 @@ export type Input = LaneViewInput;
   </@step>
 
   <@step id="plan-fix" title="Plan fix" phrase="Architect if it crosses a function" group="plan">
-    <@what>"If it crosses a function boundary, architect first."</@what>
+    <@what>"If it crosses a function boundary, <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> first."</@what>
     <@actor>Main agent</@actor>
     <@output>A specific scope for the fix</@output>
 
     <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
-      Designs the shape of a change that crosses a function boundary. It runs arena.
+      Designs the shape of a change that crosses a function boundary. It runs <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/>.
     </@row>
   </@step>
 
@@ -120,7 +120,7 @@ export type Input = LaneViewInput;
   </@step>
 
   <@step id="opening-a-pr" title="Opening a PR" phrase="Run the shared PR playbook" group="ship">
-    <@what>"Run Opening a PR."</@what>
+    <@what>"Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>."</@what>
     <@actor>Main agent</@actor>
     <@output>A ready (not draft) PR</@output>
     <@gate>None in code</@gate>
