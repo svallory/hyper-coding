@@ -8,8 +8,8 @@ const ref = (path: string, lines: string, extra = "") =>
 const HTML = `
 <section id=l data-lane>
   <a data-step=a href="#l/a">A</a>
-  <a data-connector="a~b" href="#l/a~b">c</a>
   <a data-connector="b~a" href="#l/b~a">e</a>
+  <a data-connector="a~b" href="#l/a~b">c</a>
   <a data-connector="b~c" data-manual href="#l/b~c">d</a>
 </section>
 <section id="l/a" data-panel=step>
@@ -61,8 +61,8 @@ describe("readSite", () => {
 						{ id: "b", warnings: 0, rows: [], manualRows: 0, citations: 0 },
 					],
 					connectorList: [
-						{ id: "a~b", citations: 1 },
 						{ id: "b~a", citations: 0 },
+						{ id: "a~b", citations: 1 },
 						{ id: "b~c", citations: 0 },
 					],
 				},
