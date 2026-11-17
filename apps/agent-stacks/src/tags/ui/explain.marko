@@ -1,0 +1,70 @@
+export interface Input {
+  /** The text on hover and the label for assistive technology. */
+  title: string;
+  content?: Marko.Body;
+}
+
+<id/uid/>
+<span class="explain">
+  <button/button class="explain-trigger" type="button" popovertarget=`${uid}-pop`
+    aria-label=input.title title=input.title style=`anchor-name: --${uid}`>
+    <ui-icon id="help"/>
+  </button>
+  <div/pop id=`${uid}-pop` class="explain-pop" popover style=`position-anchor: --${uid}`>
+    <${input.content}/>
+  </div>
+</span>
+
+<script>
+  // Opens on hover; a click or Esc still works through the native popover.
+  let byHover = false;
+  const open = () => {
+    if (!pop().matches(":popover-open")) {
+      pop().showPopover();
+      byHover = true;
+    }
+  };
+  const close = () => {
+    if (byHover && pop().matches(":popover-open")) pop().hidePopover();
+    byHover = false;
+  };
+  button().addEventListener("mouseenter", open);
+  button().addEventListener("mouseleave", close);
+  pop().addEventListener("toggle", (e) => {
+    if ((e as ToggleEvent).newState === "closed") byHover = false;
+  });
+</script>
+
+<style>
+  .explain {
+    display: inline-block;
+  }
+  .explain-trigger {
+    display: inline-flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: help;
+    font: inherit;
+  }
+  .explain-trigger:hover,
+  .explain-trigger:focus-visible {
+    color: var(--fg);
+  }
+  .explain-pop {
+    position: fixed;
+    inset: auto;
+    top: anchor(bottom);
+    left: anchor(left);
+    margin: 0.35rem 0 0;
+    max-width: min(22rem, calc(100vw - 32px));
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--fg);
+    font-size: 0.875rem;
+    position-try-fallbacks: flip-block, flip-inline;
+  }
+</style>

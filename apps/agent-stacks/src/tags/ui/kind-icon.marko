@@ -1,0 +1,31 @@
+import { KINDS } from "../../model/kinds";
+import type { Kind } from "../../model/types";
+
+export interface Input {
+  kind: Kind;
+}
+
+<const/info=KINDS[input.kind]/>
+<span class="kind-icon" data-icon=info.icon aria-hidden="true" style=`color: var(${info.token})`>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <if=info.icon === "skill">
+      <path d="M13 2 4 14h7l-1 8 9-12h-7z"/>
+    </if>
+    <else if=info.icon === "agent">
+      <rect x="4" y="8" width="16" height="12" rx="2"/>
+      <path d="M12 8V4M9 13v2M15 13v2"/>
+      <circle cx="12" cy="3" r="1"/>
+    </else>
+    <else if=info.icon === "hook">
+      <path d="M12 3v10a4 4 0 1 1-4-4"/>
+      <path d="M12 3 9 6M12 3l3 3"/>
+    </else>
+    <else if=info.icon === "file">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 3v5h5M9 13h6M9 17h6"/>
+    </else>
+    <else>
+      <path d="m8 7-5 5 5 5M16 7l5 5-5 5"/>
+    </else>
+  </svg>
+</span>

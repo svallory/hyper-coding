@@ -1,0 +1,10 @@
+import type { Source } from "../../model/types";
+
+export interface Input {
+  of: Source;
+  name: string;
+  path?: string;
+  line?: string;
+}
+
+<source-link ...input kind="binary" variant="prose"/>
