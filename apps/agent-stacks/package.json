@@ -10,7 +10,9 @@
 		"build": "marko-run build && bun scripts/assert-dist.ts",
 		"preview": "marko-run preview",
 		"test": "vitest run",
-		"check": "mtc"
+		"check": "mtc",
+		"inventory": "bun scripts/inventory.ts",
+		"cite-check": "bun scripts/cite-check.ts"
 	},
 	"dependencies": {
 		"@babel/types": "^7.29.0",
@@ -25,6 +27,7 @@
 		"@marko/type-check": "^2.0.0",
 		"@marko/vite": "5.4.6",
 		"@types/node": "^25.2.3",
+		"node-html-parser": "^9.0.7",
 		"typescript": "^5.4.0",
 		"vite": "^7.3.1",
 		"vitest": "4.0.18"
