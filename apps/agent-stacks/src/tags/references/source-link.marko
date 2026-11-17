@@ -20,25 +20,26 @@ export interface Input {
 <const/asCode=variant === "prose" && (input.kind === "skill" || input.kind === "command")/>
 <const/shown=asCode ? (input.name.startsWith("/") ? input.name : `/${input.name}`) : input.name/>
 
+<const/lines=(p: { from: number; to: number }) => (p.from === p.to ? `${p.from}` : `${p.from}-${p.to}`)/>
 <const/parts=input.path && input.line ? parseLineSpec(input.line) : []/>
 <const/targets=input.path ? sourceHrefs(input.of, input.path, input.line) : []/>
 <if=variant === "slot">
   <for|part, i| of=parts>
     <if=i>, </if>
     <a data-ref=input.kind data-source=input.of.id data-path=input.path
-      data-lines=`${part.from === part.to ? part.from : `${part.from}-${part.to}`}` data-slot
+      data-lines=lines(part) data-slot
       href=targets[i]>${lineLabel(part)}</a>
   </for>
 </if>
 <else-if=input.path>
-  <a data-ref=input.kind data-source=input.of.id data-path=input.path data-lines=input.line
+  <a data-ref=input.kind data-source=input.of.id data-path=input.path data-lines=(parts.length ? lines(parts[0]) : input.line)
     data-word=input.word href=targets[0]>
     <if=asCode><code>${shown}</code></if>
     <else><kind-icon kind=input.kind/> <span class="ref-name">${shown}</span></else>
   </a>
   <for|part, i| of=parts.slice(1)>
     ${" "}<a data-ref=input.kind data-source=input.of.id data-path=input.path
-      data-lines=`${part.from === part.to ? part.from : `${part.from}-${part.to}`}` data-slot
+      data-lines=lines(part) data-more
       href=targets[i + 1]>${lineLabel(part)}</a>
   </for>
 </else-if>

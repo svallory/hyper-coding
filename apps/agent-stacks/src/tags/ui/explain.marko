@@ -6,7 +6,7 @@ export interface Input {
 
 <id/uid/>
 <span/wrap class="explain">
-  <button class="explain-trigger" type="button" popovertarget=`${uid}-pop`
+  <button/button class="explain-trigger" type="button" popovertarget=`${uid}-pop`
     aria-label=input.title title=input.title style=`anchor-name: --${uid}`>
     <ui-icon id="help"/>
   </button>
@@ -16,21 +16,24 @@ export interface Input {
 </span>
 
 <script>
-  // Opens on hover; a click or Esc still works through the native popover.
+  // Hover opens it for a real mouse only; a tap or a click opens and keeps it through the native popover.
   let byHover = false;
-  const open = () => {
-    if (!pop().matches(":popover-open")) {
-      pop().showPopover();
-      byHover = true;
-    }
-  };
-  const close = () => {
+  wrap().addEventListener("pointerenter", (e) => {
+    if ((e as PointerEvent).pointerType !== "mouse" || pop().matches(":popover-open")) return;
+    pop().showPopover();
+    byHover = true;
+  });
+  wrap().addEventListener("pointerleave", (e) => {
+    if ((e as PointerEvent).pointerType !== "mouse") return;
     if (byHover && pop().matches(":popover-open")) pop().hidePopover();
     byHover = false;
-  };
-  // The wrapper holds the trigger and the popover, so the pointer can move into the text.
-  wrap().addEventListener("mouseenter", open);
-  wrap().addEventListener("mouseleave", close);
+  });
+  // A click after hovering pins the popover open instead of toggling it closed.
+  button().addEventListener("click", (e) => {
+    if (!byHover) return;
+    e.preventDefault();
+    byHover = false;
+  });
   pop().addEventListener("toggle", (e) => {
     if ((e as ToggleEvent).newState === "closed") byHover = false;
   });
@@ -53,12 +56,19 @@ export interface Input {
   .explain-trigger:focus-visible {
     color: var(--fg);
   }
+  /* Bridges the gap to the trigger, so the pointer stays over the popover on its way in. */
+  .explain-pop::before {
+    content: "";
+    position: absolute;
+    inset: -0.5rem 0 auto 0;
+    height: 0.5rem;
+  }
   .explain-pop {
     position: fixed;
     inset: auto;
-    top: anchor(bottom);
+    top: calc(anchor(bottom) + 0.4rem);
     left: anchor(left);
-    margin: 0.35rem 0 0;
+    margin: 0;
     max-width: min(22rem, calc(100vw - 32px));
     padding: 0.5rem 0.7rem;
     border: 1px solid var(--line);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lineLabel, parseLineSpec, sourceHref, sourceHrefs } from "../../src/model/links";
+import { lineLabel, parseLineSpec, sourceHrefs } from "../../src/model/links";
 import type { Source } from "../../src/model/types";
 
 const plain: Source = { id: "a", repo: "https://example.test/o/a", commit: "c0ffee", prefix: "" };
@@ -63,7 +63,7 @@ describe("sourceHrefs", () => {
 	});
 
 	it("a line on a directory is a content error", () => {
-		expect(() => sourceHref(plain, "skills/", { from: 1, to: 1 })).toThrow(/directory/);
+		expect(() => sourceHrefs(plain, "skills/", "1")).toThrow(/directory/);
 	});
 });
 
