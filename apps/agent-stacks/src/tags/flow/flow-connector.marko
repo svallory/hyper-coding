@@ -35,7 +35,7 @@ export interface Input {
 <div class="conn" data-shape=c.shape data-toward=(c.to > c.from ? "right" : "left") style=place>
   <if=c.shape === "adjacent">
     <${tag} class="conn-edge" data-connector=ends data-manual=c.manual data-inferred=c.inferred
-      data-outer=c.outer href=href aria-label=`${name}${c.label ? `: ${c.label}` : ""}`>
+      data-outer=c.outer href=href aria-label=(linked ? `${name}${c.manual ? " (manual)" : ""}${c.label ? `: ${c.label}` : ""}` : undefined)>
       <if=c.label><span class="conn-label">${c.label}</span></if>
     </>
     <if=c.pick><span class="conn-pick" title="The model picks one of several" aria-hidden="true"/></if>
@@ -60,7 +60,7 @@ export interface Input {
       <if=c.manual><span class="conn-man" data-manual-marker aria-hidden="true"><ui-icon id="manual"/></span></if>
       <if=c.pick><span class="conn-pick" title="The model picks one of several" aria-hidden="true"/></if>
       <${tag} class="conn-label" data-connector=ends data-manual=c.manual data-inferred=c.inferred
-        data-outer=c.outer href=href aria-label=name>${c.manual ? (label ? `manual: ${label}` : "manual") : label}</>
+        data-outer=c.outer href=href aria-label=(linked && !label && !c.manual ? name : undefined)>${c.manual ? (label ? `manual: ${label}` : "manual") : label}</>
       <if=c.manual>
         <explain title="Manual: a person triggers this">
           <if=c.details.when><${c.details.when}/></if>
