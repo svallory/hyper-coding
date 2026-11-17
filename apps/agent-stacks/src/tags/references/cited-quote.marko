@@ -1,16 +1,13 @@
-import type { Kind, Source } from "../../model/types";
+import type { Source } from "../../model/types";
 
 export interface Input {
   of: Source;
   path: string;
   line?: string;
-  /** What the cited file is, and how it is named next to the quote. */
-  kind?: Kind;
-  name?: string;
   content?: Marko.Body;
 }
 
 <const/file=input.path.split("/").filter(Boolean).pop() as string/>
 <q class="cited-quote"><${input.content}/></q>${" "}
-<source-link of=input.of kind=(input.kind ?? "reference") name=(input.name ?? file)
+<source-link of=input.of kind="reference" name=file
   path=input.path line=input.line variant="prose"/>

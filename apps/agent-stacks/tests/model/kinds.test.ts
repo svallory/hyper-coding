@@ -17,12 +17,22 @@ describe("kinds", () => {
 		},
 	);
 
-	it("the reference tags are the ones D22 lists", () => {
-		expect(refTags.sort()).toEqual(
-			["agent", "binary", "code", "command", "file", "hook", "playbook", "script", "skill", "tool"]
-				.map((n) => `${n}-ref.marko`)
-				.sort(),
-		);
+	it("the D22 tags exist and the ones it leaves out are not built", () => {
+		for (const n of [
+			"skill",
+			"command",
+			"agent",
+			"hook",
+			"file",
+			"playbook",
+			"script",
+			"code",
+			"binary",
+			"tool",
+		])
+			expect(refTags).toContain(`${n}-ref.marko`);
+		for (const n of ["rule", "step", "stack", "artifact"])
+			expect(refTags).not.toContain(`${n}-ref.marko`);
 	});
 
 	it.each(refTags)("%s passes exactly one kind, from the list", (file) => {

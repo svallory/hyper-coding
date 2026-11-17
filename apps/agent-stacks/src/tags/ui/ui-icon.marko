@@ -1,6 +1,6 @@
 export interface Input {
-  /** warning: a triangle; info: a circle with an i; manual: a hand-off arrow; help: a question mark. */
-  id: "warning" | "info" | "manual" | "help";
+  /** warning: a triangle; manual: a hand-off arrow; help: a question mark. */
+  id: "warning" | "manual" | "help";
 }
 
 <span class="ui-icon" data-ui-icon=input.id aria-hidden="true">
@@ -9,10 +9,6 @@ export interface Input {
       <path d="M12 3 2 20h20z"/>
       <path d="M12 10v4M12 17.5v.5"/>
     </if>
-    <else if=input.id === "info">
-      <circle cx="12" cy="12" r="9"/>
-      <path d="M12 11v6M12 7.5v.5"/>
-    </else>
     <else if=input.id === "manual">
       <path d="M9 11V5a2 2 0 0 1 4 0v5M13 9a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7 6 6 0 0 1-5-3l-2-4a2 2 0 0 1 3-2l2 2"/>
     </else>
