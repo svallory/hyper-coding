@@ -75,6 +75,7 @@ describe("flow-connector", () => {
 		expect(edge.startsWith("<a")).toBe(true);
 		expect(edge).toContain("href=#demo/a~b");
 		expect(text(html)).toContain("The operator says go.");
+		expect(edge).toContain('aria-label="Title a to Title b (manual)"');
 	});
 
 	it("renders an arc without a label with no invented words", () => {
@@ -86,23 +87,36 @@ describe("flow-connector", () => {
 		expect(html).not.toContain("aria-label");
 	});
 
-	it("keeps a link's visible label as its accessible name", () => {
-		const details = { when: (() => {}) as never };
+	const details = { when: (() => {}) as never };
+	const linkedArcs: [string, Partial<Connector>, string, string | undefined][] = [
+		["a label", { label: "rework" }, "rework", undefined],
+		["the manual flag", { manual: true }, "manual", undefined],
+		["a label and the manual flag", { label: "rework", manual: true }, "manual: rework", undefined],
+		["neither", {}, "", "Title d to Title a"],
+	];
+	it.each(linkedArcs)(
+		"names a linked arc with %s by its visible text, or by its steps when it has none",
+		(_name, over, visible, ariaLabel) => {
+			const html = render(FlowConnector, {
+				lane,
+				connector: connector({ from: 3, to: 0, shape: "below", details, ...over }),
+			});
+			const [edge] = tagsWith(html, "data-connector=d~a");
+			expect(edge.startsWith("<a")).toBe(true);
+			expect(text(html)).toContain(visible);
+			if (ariaLabel) expect(edge).toContain(`aria-label="${ariaLabel}"`);
+			else expect(edge).not.toContain("aria-label");
+		},
+	);
+
+	it("names a linked adjacent edge by its steps, the manual flag and the label", () => {
 		const html = render(FlowConnector, {
 			lane,
-			connector: connector({
-				from: 3,
-				to: 0,
-				shape: "below",
-				label: "rework",
-				manual: true,
-				details,
-			}),
+			connector: connector({ label: "go", manual: true, details }),
 		});
-		const [edge] = tagsWith(html, "data-connector=d~a");
-		expect(edge.startsWith("<a")).toBe(true);
-		expect(edge).not.toContain("aria-label");
-		expect(text(html)).toContain("manual: rework");
+		expect(tagsWith(html, "data-connector=a~b")[0]).toContain(
+			'aria-label="Title a to Title b (manual): go"',
+		);
 	});
 
 	it("renders an inferred outer back edge as an arc labelled in visible text, with both hooks", () => {
