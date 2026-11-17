@@ -1,0 +1,60 @@
+export interface Input {
+  label: string;
+  title?: string;
+  /** Lane links outside any group (each lane's `view="nav"`). */
+  content?: Marko.Body;
+  /** Titled groups of lane links; a group with no body renders nothing. */
+  group?: Marko.AttrTag<{ title: string; content?: Marko.Body }>;
+  /** A link to a section of the same page. */
+  section?: Marko.AttrTag<{ to: string; content?: Marko.Body }>;
+}
+
+<const/groups=[...(input.group ?? [])].filter((g) => g.content)/>
+
+<if=input.content || groups.length || input.section>
+  <nav class="lane-nav" aria-label=input.label data-lane-nav>
+    <if=input.title><strong class="nav-title">${input.title}</strong></if>
+    <for|g| of=groups>
+      <div class="nav-row" data-nav-group=g.title>
+        <span class="nav-group">${g.title}</span>
+        <${g.content}/>
+      </div>
+    </for>
+    <if=input.content || input.section>
+      <div class="nav-row">
+        <${input.content}/>
+        <for|s| of=input.section>
+          <a href=`#${s.to}` data-section-link=s.to><${s.content}/></a>
+        </for>
+      </div>
+    </if>
+  </nav>
+</if>
+
+<style>
+  .lane-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0 0 2.5rem;
+    font-size: 0.9375rem;
+  }
+  .nav-title {
+    font-stretch: var(--cond);
+    font-size: 1.0625rem;
+  }
+  .nav-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 1.125rem;
+  }
+  .nav-group {
+    min-width: 7.5rem;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+</style>

@@ -1,0 +1,40 @@
+export interface Input {
+  case: "nav" | "reading" | "cover" | "legend";
+}
+
+<if=input.case === "nav">
+  <lane-nav label="Playbooks" title="Lanes">
+    <@group title="Entry"><a href="#router">Router</a></@group>
+    <@group title="Nothing here"/>
+    <@group title="Understand"><a href="#investigation">Investigation</a></@group>
+  </lane-nav>
+</if>
+<else-if=input.case === "reading">
+  <reading-list id="reading" title="My reading">
+    <@item>first</@item>
+    <@item>second</@item>
+    <@item>third</@item>
+  </reading-list>
+</else-if>
+<else-if=input.case === "cover">
+  <cover-table id="questions" title="Questions" laneHeading="Stack">
+    <@col key="req">Requirements</@col>
+    <@col key="design">Design</@col>
+    <@col key="learn">Learning kept</@col>
+    <tr data-lane-row="alpha"><th scope="row">alpha</th><td>one</td></tr>
+  </cover-table>
+</else-if>
+<else>
+  <legend-key label="Key">
+    <@group title="Steps">
+      <@item swatch="plan">Plan</@item>
+      <@item icon="human">a human decides</@item>
+    </@group>
+    <@group title="Connectors">
+      <@item line="dashed">feeds the next</@item>
+      <@item marker="pick">a choice</@item>
+    </@group>
+    <@item icon="file">files</@item>
+    <@item icon="code">code</@item>
+  </legend-key>
+</else>

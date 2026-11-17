@@ -5,6 +5,7 @@
 		"./src/tags/ui",
 		"./src/tags/flow",
 		"./src/tags/panel",
-		"./src/tags/tree"
+		"./src/tags/tree",
+		"./src/tags/sections"
 	]
 }
