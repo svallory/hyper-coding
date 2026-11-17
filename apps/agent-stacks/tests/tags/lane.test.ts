@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import By from "../fixtures/lane-by.marko";
 import Deep from "../fixtures/lane-deep.marko";
 import Dir from "../fixtures/lane-dir.marko";
 import Ok from "../fixtures/lane-ok.marko";
@@ -56,5 +57,17 @@ describe("a lane with a content problem", () => {
 		const html = render(Dir, { view: "panels" });
 		expect(html).toMatch(/<pre data-content-error>[^<]*child\.md[^<]*directory/);
 		expect(html).not.toContain("data-panel");
+	});
+});
+
+describe("a lane's `by`", () => {
+	it("shows an attribute tag's reference tag, and the text after it, where the text form shows", () => {
+		const html = render(By, { view: "flow" });
+		const by = /<p class=lane-by>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+		expect(by).toContain("data-ref=playbook");
+		expect(text(by)).toBe("bug-fix.md · a playbook");
+		expect(
+			text(/<p class=lane-by>([\s\S]*?)<\/p>/.exec(render(Ok, { view: "flow" }))?.[1] ?? ""),
+		).toBe("nobody");
 	});
 });
