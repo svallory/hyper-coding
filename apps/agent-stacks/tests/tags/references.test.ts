@@ -84,6 +84,10 @@ describe("reference tags, prose variant", () => {
 		const html = render(SkillRef, { of: pstack, name: "plan", path: FILE, line: "3,7-9" });
 		expect(hrefs(html)).toEqual([`${BLOB}?plain=1#L3`, `${BLOB}?plain=1#L7-L9`]);
 		expect(linkTexts(html)).toEqual(["/plan", ":7-9"]);
+		// Each part is in exactly one data-lines; only the extra link is marked data-more.
+		expect([...html.matchAll(/data-lines=([^\s>]+)/g)].map((m) => m[1])).toEqual(["3", "7-9"]);
+		expect(html.match(/data-more/g)).toHaveLength(1);
+		expect(html).not.toContain("data-slot");
 	});
 
 	it("the name variant shows icon and name even for a skill", () => {

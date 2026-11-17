@@ -35,7 +35,7 @@ function isDirectory(path: string): boolean {
  * line or range adds `?plain=1` (without it GitHub renders Markdown and ignores the anchor);
  * a directory targets the tree, and a line on a directory is a content error.
  */
-export function sourceHref(source: Source, path: string, part?: LinePart): string {
+function sourceHref(source: Source, path: string, part?: LinePart): string {
 	const full = `${source.prefix}${path}`;
 	if (isDirectory(path)) {
 		if (part) throw new Error(`A line on the directory "${path}" is a content error.`);
