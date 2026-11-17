@@ -8,7 +8,7 @@ export type Input = LaneViewInput;
     One plan file grows from requirements to units; review traces back to its IDs. The Compound step writes down what the next change should not have to rediscover. Order shown is the one the <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/> command runs; there Brainstorm is an optional route and Compound runs only when the work corrected a wrong belief.
   </@summary>
   <@order label="Order, per the author" lead="recommended in docs; the lists disagree">
-    README: "The core loop is six steps: brainstorm the requirements, plan the implementation, work through the plan, simplify what you wrote, review the result, then compound the learning". The older guide on every.to has four: "Plan → Work → Review → Compound → Repeat". docs/guides/README.md chains brainstorm, plan, work, compound and calls review and simplify on-demand. Ship appears only in <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/>, which runs Compound before the PR; the <skill-ref of=ce name="ce-work" path="skills/ce-work/SKILL.md"/> guide puts it after shipping. Typed by hand, nothing enforces any of these orders.
+    README: "The core loop is six steps: brainstorm the requirements, plan the implementation, work through the plan, simplify what you wrote, review the result, then compound the learning". The older guide on every.to has four: "Plan → Work → Review → Compound → Repeat". <file-ref of=ce name="docs/guides/README.md"/> chains brainstorm, plan, work, compound and calls review and simplify on-demand. Ship appears only in <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/>, which runs Compound before the PR; the <skill-ref of=ce name="ce-work" path="skills/ce-work/SKILL.md"/> guide puts it after shipping. Typed by hand, nothing enforces any of these orders.
   </@order>
   <@owner from="brainstorm" to="brainstorm" name="ce-brainstorm" note="skill"/>
   <@owner from="plan" to="plan" name="ce-plan" note="skill; ends by invoking ce-doc-review"/>
@@ -423,7 +423,7 @@ export type Input = LaneViewInput;
     <@actor>Main agent + research subagents</@actor>
     <@input>A solved, verified problem</@input>
     <@output>
-      At most one test, lint rule or CODING_STANDARDS.md entry, plus at most one &lt;root>/solutions/&lt;category>/&lt;file>.md learning; new terms go into CONCEPTS.md
+      At most one test, lint rule or <file-ref of=ce name="CODING_STANDARDS.md"/> entry, plus at most one &lt;root>/solutions/&lt;category>/&lt;file>.md learning; new terms go into <file-ref of=ce name="CONCEPTS.md"/>
     </@output>
     <@gate>
       Would a future engineer still repeat the mistake? <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/> runs it only when the work corrected a wrong belief
@@ -583,7 +583,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>model</@by>
     <@how>
-      Under <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/>: <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/> step 3 invokes <skill-ref of=ce name="ce-simplify-code" path="skills/ce-simplify-code/SKILL.md"/> mode:pipeline size-cutoff:30 after validating <skill-ref of=ce name="ce-work" path="skills/ce-work/SKILL.md"/>'s status:complete return (lfg/references/work-return.md). Standalone <skill-ref of=ce name="ce-work" path="skills/ce-work/SKILL.md"/>: Phase 3 step 2 invokes it itself at >=30 substantive changed code lines. A human typing the skills invokes <skill-ref of=ce name="ce-simplify-code" path="skills/ce-simplify-code/SKILL.md"/> themselves (standalone mode reports first). Inside <skill-ref of=ce name="ce-work" path="skills/ce-work/SKILL.md"/> Phase 2 a mid-run simplify may already have run and recorded simplified_through; <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/> then simplifies only changes after that SHA.
+      Under <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/>: <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/> step 3 invokes <skill-ref of=ce name="ce-simplify-code" path="skills/ce-simplify-code/SKILL.md"/> mode:pipeline size-cutoff:30 after validating <skill-ref of=ce name="ce-work" path="skills/ce-work/SKILL.md"/>'s status:complete return (<file-ref of=ce name="work-return.md" path="skills/lfg/references/work-return.md"/>). Standalone <skill-ref of=ce name="ce-work" path="skills/ce-work/SKILL.md"/>: Phase 3 step 2 invokes it itself at >=30 substantive changed code lines. A human typing the skills invokes <skill-ref of=ce name="ce-simplify-code" path="skills/ce-simplify-code/SKILL.md"/> themselves (standalone mode reports first). Inside <skill-ref of=ce name="ce-work" path="skills/ce-work/SKILL.md"/> Phase 2 a mid-run simplify may already have run and recorded simplified_through; <skill-ref of=ce name="lfg" path="skills/lfg/SKILL.md"/> then simplifies only changes after that SHA.
     </@how>
     <@bound>none stated</@bound>
     <@source>

@@ -8,7 +8,7 @@ export type Input = LaneViewInput;
     Small skills the human types. No orchestrator, no hooks, and no script runs in any step. A router skill, <skill-ref of=aihero name="ask-matt" path="skills/engineering/ask-matt/SKILL.md"/>, names the next command and stops.
   </@summary>
   <@order label="Order, per the author" lead="recommended in docs, conditional; refuses tools that own the process">
-    "<skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md"/> → <skill-ref of=aihero name="to-spec" path="skills/engineering/to-spec/SKILL.md"/> → <skill-ref of=aihero name="to-tickets" path="skills/engineering/to-tickets/SKILL.md"/> → implement → <skill-ref of=aihero name="code-review" path="skills/engineering/code-review/SKILL.md"/> → <skill-ref of=aihero name="retro" path="skills/engineering/retro/SKILL.md"/>" (docs/engineering/implement.md). Spec and tickets are skipped for single-session work; <skill-ref of=aihero name="retro" path="skills/engineering/retro/SKILL.md"/> is optional after a smooth build; prototype and <skill-ref of=aihero name="pr" path="skills/engineering/pr/SKILL.md"/> sit outside the main flow. A static table of steps would "be wrong for most situations" (docs/engineering/ask-matt.md).
+    "<skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md"/> → <skill-ref of=aihero name="to-spec" path="skills/engineering/to-spec/SKILL.md"/> → <skill-ref of=aihero name="to-tickets" path="skills/engineering/to-tickets/SKILL.md"/> → <skill-ref of=aihero name="implement" path="skills/engineering/implement/SKILL.md"/> → <skill-ref of=aihero name="code-review" path="skills/engineering/code-review/SKILL.md"/> → <skill-ref of=aihero name="retro" path="skills/engineering/retro/SKILL.md"/>" (<file-ref of=aihero name="docs/engineering/implement.md"/>). Spec and tickets are skipped for single-session work; <skill-ref of=aihero name="retro" path="skills/engineering/retro/SKILL.md"/> is optional after a smooth build; prototype and <skill-ref of=aihero name="pr" path="skills/engineering/pr/SKILL.md"/> sit outside the main flow. A static table of steps would "be wrong for most situations" (<file-ref of=aihero name="docs/engineering/ask-matt.md"/>).
   </@order>
   <@owner from="grill" to="grill" name="grill-with-docs" note="skill"/>
   <@owner from="prototype" to="prototype" name="prototype"
@@ -55,11 +55,11 @@ export type Input = LaneViewInput;
       <skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md" line="4"/>
     </@starts>
     <@via>
-      <skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md"/> (grilling, <skill-ref of=aihero name="domain-modeling" path="skills/engineering/domain-modeling/SKILL.md"/>)
+      <skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md"/> (<skill-ref of=aihero name="grilling" path="skills/productivity/grilling/SKILL.md"/>, <skill-ref of=aihero name="domain-modeling" path="skills/engineering/domain-modeling/SKILL.md"/>)
     </@via>
     <@actor>Human answers; main agent asks</@actor>
     <@input>Loose idea and the repo</@input>
-    <@output>Shared understanding in the conversation; GLOSSARY.md; docs/adr/*.md</@output>
+    <@output>Shared understanding in the conversation; <file-ref of=aihero name="GLOSSARY.md"/>; <file-ref of=aihero name="docs/adr/"/>*.md</@output>
     <@gate>
       Human confirms shared understanding; no open questions left
       <skill-ref of=aihero name="grilling" path="skills/productivity/grilling/SKILL.md" line="30"/>
@@ -322,7 +322,7 @@ export type Input = LaneViewInput;
     <@input>Session log</@input>
     <@output>Ranked suggestions, applied only if accepted</@output>
     <@gate>
-      The human chooses ("Nothing changes until you pick" is in docs/engineering/retro.md, not the skill). Skippable after a smooth build
+      The human chooses ("Nothing changes until you pick" is in <file-ref of=aihero name="docs/engineering/retro.md" path="docs/engineering/retro.md"/>, not the skill). Skippable after a smooth build
       <skill-ref of=aihero name="retro" path="skills/engineering/retro/SKILL.md" line="25"/>
       <file-ref of=aihero name="retro.md" path="docs/engineering/retro.md" line="35"/>
     </@gate>
@@ -346,7 +346,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>human</@by>
     <@how>
-      <skill-ref of=aihero name="ask-matt" path="skills/engineering/ask-matt/SKILL.md"/> (a router the human types, which 'recommends and stops') poses the question 'can you settle every question in conversation?'; the human then types <skill-ref of=aihero name="handoff" path="skills/productivity/handoff/SKILL.md"/>, opens a fresh session and runs <skill-ref of=aihero name="prototype" path="skills/engineering/prototype/SKILL.md"/>. The model could also start prototype by description (model-invoked), but <skill-ref of=aihero name="handoff" path="skills/productivity/handoff/SKILL.md"/> cannot be fired by the model. No default stated; if the answer is yes the flow goes to the other branches.
+      <skill-ref of=aihero name="ask-matt" path="skills/engineering/ask-matt/SKILL.md"/> (a router the human types, which 'recommends and stops') poses the question 'can you settle every question in conversation?'; the human then types <skill-ref of=aihero name="handoff" path="skills/productivity/handoff/SKILL.md"/>, opens a fresh session and runs <skill-ref of=aihero name="prototype" path="skills/engineering/prototype/SKILL.md"/>. The model could also start <skill-ref of=aihero name="prototype" path="skills/engineering/prototype/SKILL.md"/> by description (model-invoked), but <skill-ref of=aihero name="handoff" path="skills/productivity/handoff/SKILL.md"/> cannot be fired by the model. No default stated; if the answer is yes the flow goes to the other branches.
     </@how>
     <@bound>none stated</@bound>
     <@source>
@@ -430,7 +430,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>human</@by>
     <@how>
-      <skill-ref of=aihero name="ask-matt" path="skills/engineering/ask-matt/SKILL.md"/> poses 'Branch: is this a multi-session build?' to the reader; Yes goes to <skill-ref of=aihero name="to-spec" path="skills/engineering/to-spec/SKILL.md"/> then <skill-ref of=aihero name="to-tickets" path="skills/engineering/to-tickets/SKILL.md"/>. The stated criterion is session or context size: 'too big for one agent session and must be split across several. That is the whole trigger' (docs/engineering/to-spec.md). The only number is the smart zone (~150k tokens, PHASE-BOUNDARIES.md:21). No program measures size, no default, and the router only recommends. The harness does enforce that only the human can start <skill-ref of=aihero name="to-spec" path="skills/engineering/to-spec/SKILL.md"/> (user-invoked).
+      <skill-ref of=aihero name="ask-matt" path="skills/engineering/ask-matt/SKILL.md"/> poses 'Branch: is this a multi-session build?' to the reader; Yes goes to <skill-ref of=aihero name="to-spec" path="skills/engineering/to-spec/SKILL.md"/> then <skill-ref of=aihero name="to-tickets" path="skills/engineering/to-tickets/SKILL.md"/>. The stated criterion is session or context size: 'too big for one agent session and must be split across several. That is the whole trigger' (<file-ref of=aihero name="docs/engineering/to-spec.md"/>). The only number is the smart zone (~150k tokens, PHASE-BOUNDARIES.md:21). No program measures size, no default, and the router only recommends. The harness does enforce that only the human can start <skill-ref of=aihero name="to-spec" path="skills/engineering/to-spec/SKILL.md"/> (user-invoked).
     </@how>
     <@bound>none stated</@bound>
     <@source>
@@ -444,7 +444,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>human</@by>
     <@how>
-      Same question as the multi-session branch; answer No sends the human to type <skill-ref of=aihero name="implement" path="skills/engineering/implement/SKILL.md"/> 'right here, in the same context window'. Criterion docs/engineering/to-spec.md: 'Decided, and the work fits one context window | implement: skip the spec'. No program checks size and no default; the model cannot start <skill-ref of=aihero name="implement" path="skills/engineering/implement/SKILL.md"/> (user-invoked). Caveat in docs/engineering/implement.md: SKILL.md says 'the spec or tickets', so if the plan lives only in the thread 'say so when you invoke it'.
+      Same question as the multi-session branch; answer No sends the human to type <skill-ref of=aihero name="implement" path="skills/engineering/implement/SKILL.md"/> 'right here, in the same context window'. Criterion <file-ref of=aihero name="docs/engineering/to-spec.md"/>: 'Decided, and the work fits one context window | implement: skip the spec'. No program checks size and no default; the model cannot start <skill-ref of=aihero name="implement" path="skills/engineering/implement/SKILL.md"/> (user-invoked). Caveat in <file-ref of=aihero name="docs/engineering/implement.md"/>: <file-ref of=aihero name="SKILL.md"/> says 'the spec or tickets', so if the plan lives only in the thread 'say so when you invoke it'.
     </@how>
     <@bound>none stated</@bound>
     <@source>
@@ -458,7 +458,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>human</@by>
     <@how>
-      The human types <skill-ref of=aihero name="handoff" path="skills/productivity/handoff/SKILL.md"/> in the prototype session, which writes a temp-dir file, then points the original session at it. Judging that the question is answered is the human's (inferred from LOGIC.md:54); no gate is stated in prototype/SKILL.md beyond 'Capture it when done'. No bound; docs say the prototype is answered in one sitting.
+      The human types <skill-ref of=aihero name="handoff" path="skills/productivity/handoff/SKILL.md"/> in the prototype session, which writes a temp-dir file, then points the original session at it. Judging that the question is answered is the human's (inferred from LOGIC.md:54); no gate is stated in <file-ref of=aihero name="prototype/SKILL.md" path="skills/engineering/prototype/SKILL.md"/> beyond 'Capture it when done'. No bound; docs say the prototype is answered in one sitting.
     </@how>
     <@bound>none stated</@bound>
     <@source>
@@ -484,7 +484,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>model</@by>
     <@how>
-      The orchestrating model dispatches the fix subagent per the skill text; the human is not asked. The skill states no re-review and no stop rule after the fix (docs/engineering/implement-spec.md: 'it doesn't yet say when to stop after that fix').
+      The orchestrating model dispatches the fix subagent per the skill text; the human is not asked. The skill states no re-review and no stop rule after the fix (<file-ref of=aihero name="docs/engineering/implement-spec.md"/>: 'it doesn't yet say when to stop after that fix').
     </@how>
     <@bound>
       one fix pass stated ('a single fresh implementer subagent'); no re-review or round limit stated
@@ -500,7 +500,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>human</@by>
     <@how>
-      <skill-ref of=aihero name="retro" path="skills/engineering/retro/SKILL.md"/> only presents candidates, most severe first; the human picks, per docs. The loop back to <skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md"/> is the human starting a new idea. <skill-ref of=aihero name="ask-matt" path="skills/engineering/ask-matt/SKILL.md"/>: 'The next build then starts from a better environment.' Nothing in retro/SKILL.md names <skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md"/> as a next step.
+      <skill-ref of=aihero name="retro" path="skills/engineering/retro/SKILL.md"/> only presents candidates, most severe first; the human picks, per docs. The loop back to <skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md"/> is the human starting a new idea. <skill-ref of=aihero name="ask-matt" path="skills/engineering/ask-matt/SKILL.md"/>: 'The next build then starts from a better environment.' Nothing in <file-ref of=aihero name="retro/SKILL.md" path="skills/engineering/retro/SKILL.md"/> names <skill-ref of=aihero name="grill-with-docs" path="skills/engineering/grill-with-docs/SKILL.md"/> as a next step.
     </@how>
     <@bound>none stated</@bound>
     <@source>

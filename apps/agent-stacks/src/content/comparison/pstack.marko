@@ -5,10 +5,10 @@ export type Input = LaneViewInput;
 <lane ...input id="pstack" name="pstack" by="poteto (Cursor) · Cursor, with a Claude Code adapter"
   source=pstack>
   <@summary>
-    <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> routes a request to one of 22 playbooks; there is no single pipeline. This lane is our synthesis of the Feature, Bug fix, Opening a PR, Babysit and Shipping playbooks.
+    <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> routes a request to one of 22 playbooks; there is no single pipeline. This lane is our synthesis of the <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md"/>, <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"/>, <playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>, <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md"/> and <playbook-ref of=pstack name="shipping" path="skills/poteto-mode/playbooks/shipping.md"/> playbooks.
   </@summary>
   <@order label="Order, per the author" lead="recommended in docs; nothing enforces it">
-    Each playbook is an ordered step list the agent copies into a todo list. Feature: trace, architect, four-item checkpoint, delegate, verify, small commits, interrogate if contested, open PR (playbooks/feature.md). Babysit, land and <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md"/> are separate requests. The guide follows the same chain: "Read the pages in order the first time." The author refuses plans and specs, not process: "the best spec is code."
+    Each playbook is an ordered step list the agent copies into a todo list. Feature: trace, <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/>, four-item checkpoint, delegate, verify, small commits, <skill-ref of=pstack name="interrogate" path="skills/interrogate/SKILL.md"/> if contested, open PR (<playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md"/>). <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md"/>, land and <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md"/> are separate requests. The guide follows the same chain: "Read the pages in order the first time." The author refuses plans and specs, not process: "the best spec is code."
   </@order>
   <@owner from="route-and-restate" to="route-and-restate" name="poteto-mode" note="skill"/>
   <@owner from="understand-current-state" to="verify-real-surface" name="feature or bug-fix"
@@ -90,7 +90,7 @@ export type Input = LaneViewInput;
       <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md" line="5"/>
       <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="7"/>
     </@starts>
-    <@via>Feature, Bug fix, Refactoring playbooks; why skill</@via>
+    <@via><playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md"/>, <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"/>, <playbook-ref of=pstack name="refactoring" path="skills/poteto-mode/playbooks/refactoring.md"/> playbooks; <skill-ref of=pstack name="why" path="skills/why/SKILL.md"/> skill</@via>
     <@actor>Main agent; investigation delegated to subagents</@actor>
     <@input>Routed request</@input>
     <@output>A mechanism confirmed at runtime, or a pinning test. No named file</@output>
@@ -115,7 +115,7 @@ export type Input = LaneViewInput;
   <@step id="design-the-shape" title="Design the shape"
     phrase="Architect, compete, prototype, checkpoint" group="plan">
     <@what>
-      An architect sketch; competing candidates from subagents judged by a model from another vendor; a throwaway prototype when a decision needs one.
+      An <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> sketch; competing candidates from subagents judged by a model from another vendor; a throwaway prototype when a decision needs one.
     </@what>
     <@starts>
       The next todo item of the playbook: Feature step 2, Bug fix step 3. A Multi-phase plan request is matched to its own playbook instead.
@@ -123,7 +123,7 @@ export type Input = LaneViewInput;
       <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="8-9"/>
       <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="110"/>
     </@starts>
-    <@via>architect, arena skills; Prototype, Multi-phase plan playbooks</@via>
+    <@via><skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/>, <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/> skills; <playbook-ref of=pstack name="prototype" path="skills/poteto-mode/playbooks/prototype.md"/>, <playbook-ref of=pstack name="multi-phase-plan" path="skills/poteto-mode/playbooks/multi-phase-plan.md"/> playbooks</@via>
     <@actor>Main agent owns the design; subagent candidates</@actor>
     <@input>What step 2 established</@input>
     <@output>Sketch, synthesis note, or a plan file with one checkbox per PR</@output>
@@ -178,7 +178,7 @@ export type Input = LaneViewInput;
   <@step id="delegate-build" title="Delegate build" phrase="Fresh subagent codes small units"
     group="build">
     <@what>
-      A fresh subagent writes each unit; the lead reviews the diff. When the implementation admits several valid shapes, the arena skill is mandatory ("no skip-with-reason escape"). A fix round gets a new subagent with the original brief and the prior report.
+      A fresh subagent writes each unit; the lead reviews the diff. When the implementation admits several valid shapes, the <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/> skill is mandatory ("no skip-with-reason escape"). A fix round gets a new subagent with the original brief and the prior report.
     </@what>
     <@starts>
       The next todo item: Feature step 4, the second half of Bug fix step 3.
@@ -186,7 +186,7 @@ export type Input = LaneViewInput;
       <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="9"/>
     </@starts>
     <@via>
-      <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/> agent; <skill-ref of=pstack name="tdd" path="skills/tdd/SKILL.md"/>, swarm, arena skills
+      <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/> agent; <skill-ref of=pstack name="tdd" path="skills/tdd/SKILL.md"/>, <skill-ref of=pstack name="swarm" path="skills/swarm/SKILL.md"/>, <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/> skills
     </@via>
     <@actor>Subagent (Opus, highest effort, by default)</@actor>
     <@input>Scope, named data shape, success criteria</@input>
@@ -243,11 +243,11 @@ export type Input = LaneViewInput;
       <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="10"/>
     </@starts>
     <@via>
-      <skill-ref of=pstack name="principle-prove-it-works" path="skills/principle-prove-it-works/SKILL.md"/>, interrogate
+      <skill-ref of=pstack name="principle-prove-it-works" path="skills/principle-prove-it-works/SKILL.md"/>, <skill-ref of=pstack name="interrogate" path="skills/interrogate/SKILL.md"/>
     </@via>
     <@actor>Main agent + adversary subagents</@actor>
     <@input>Committed head and the done check</@input>
-    <@output>Failing-then-passing output, screenshots, interrogate report</@output>
+    <@output>Failing-then-passing output, screenshots, <skill-ref of=pstack name="interrogate" path="skills/interrogate/SKILL.md"/> report</@output>
     <@gate>
       "'Inconclusive' or wrong-surface is not a pass"
       <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md" line="13"/>
@@ -289,7 +289,7 @@ export type Input = LaneViewInput;
       <playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md" line="3"/>
     </@starts>
     <@via>
-      Opening a PR playbook; <skill-ref of=pstack name="no-comments" path="skills/no-comments/SKILL.md"/>, <skill-ref of=pstack name="unslop" path="skills/unslop/SKILL.md"/> skills
+      <playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> playbook; <skill-ref of=pstack name="no-comments" path="skills/no-comments/SKILL.md"/>, <skill-ref of=pstack name="unslop" path="skills/unslop/SKILL.md"/> skills
     </@via>
     <@actor>Main agent</@actor>
     <@input>Verified branch</@input>
@@ -327,7 +327,7 @@ export type Input = LaneViewInput;
       <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="27"/>
       <playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md" line="9"/>
     </@starts>
-    <@via>Babysit playbook, scripts/watch-pr</@via>
+    <@via><playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md"/> playbook, <script-ref of=pstack name="watch-pr" path="skills/poteto-mode/scripts/watch-pr/watch-pr"/></@via>
     <@actor>Main agent, or one cloud agent per PR</@actor>
     <@input>Open PR</@input>
     <@output>Fix pushes, thread replies, merge-ready report</@output>
@@ -369,7 +369,7 @@ export type Input = LaneViewInput;
       <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="27"/>
       <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md" line="10"/>
     </@starts>
-    <@via>Shipping, Autopilot playbooks</@via>
+    <@via><playbook-ref of=pstack name="shipping" path="skills/poteto-mode/playbooks/shipping.md"/>, <playbook-ref of=pstack name="autopilot"/> playbooks</@via>
     <@actor>Operator says land; verifier subagents; root agent merges</@actor>
     <@input>Merge-ready PRs</@input>
     <@output>PASS, PASS+NOTES or FAIL per PR; merged PRs</@output>
@@ -408,7 +408,7 @@ export type Input = LaneViewInput;
       <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md" line="3-4"/>
       <skill-ref of=pstack name="correct" path="skills/correct/SKILL.md" line="3-4"/>
     </@starts>
-    <@via>reflect, correct skills</@via>
+    <@via><skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md"/>, <skill-ref of=pstack name="correct" path="skills/correct/SKILL.md"/> skills</@via>
     <@actor>Main agent proposes; the human runs it and approves</@actor>
     <@input>
       reflect: the session transcript. correct: commits, reverts, review comments, instruction files
@@ -455,7 +455,7 @@ export type Input = LaneViewInput;
 
   <@connector from="design-the-shape" to="delegate-build" enforced="prompt">
     <@when>
-      A shape is chosen. The architect skill is required when the change crosses a function boundary; it sends a large or contested design to arena. A multi-PR plan stops here until the operator says go.
+      A shape is chosen. The <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> skill is required when the change crosses a function boundary; it sends a large or contested design to <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/>. A multi-PR plan stops here until the operator says go.
     </@when>
     <@by>model; the operator for a multi-PR plan</@by>
     <@how>
@@ -481,11 +481,11 @@ export type Input = LaneViewInput;
 
   <@connector from="verify-real-surface" to="open-pr" enforced="prompt">
     <@when>
-      The change is verified on the surface it touches. A contested change goes through interrogate first.
+      The change is verified on the surface it touches. A contested change goes through <skill-ref of=pstack name="interrogate" path="skills/interrogate/SKILL.md"/> first.
     </@when>
     <@by>model</@by>
     <@how>
-      "Inconclusive or wrong-surface is not a pass." Commits are rebased into small ordered ones, then the Opening a PR playbook starts.
+      "Inconclusive or wrong-surface is not a pass." Commits are rebased into small ordered ones, then the <playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> playbook starts.
     </@how>
     <@bound>none stated</@bound>
     <@source>

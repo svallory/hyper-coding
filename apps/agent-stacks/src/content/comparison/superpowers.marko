@@ -8,7 +8,7 @@ export type Input = LaneViewInput;
     15 skills, no commands. A <script-ref of=superpowers name="session-start" path="hooks/session-start"/> hook injects a rule that skill use is mandatory. The human gates the design, the plan and the merge; in between the agent runs without pausing and records each decision it made alone.
   </@summary>
   <@order label="Order, per the author" lead="recommended in docs and skill hand-offs; nothing checks the order">
-    README, "The Basic Workflow": <skill-ref of=superpowers name="brainstorming" path="skills/brainstorming/SKILL.md"/>, <skill-ref of=superpowers name="using-git-worktrees" path="skills/using-git-worktrees/SKILL.md"/>, <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md"/>, <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md"/> or <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md"/>, <skill-ref of=superpowers name="test-driven-development" path="skills/test-driven-development/SKILL.md"/>, requesting-code-review, <skill-ref of=superpowers name="finishing-a-development-branch" path="skills/finishing-a-development-branch/SKILL.md"/>. Each skill names the next one in its own text. The skills differ from the README: the worktree is created after the plan, per-task review uses its own prompt, and whole-branch review is not in the README list.
+    README, "The Basic Workflow": <skill-ref of=superpowers name="brainstorming" path="skills/brainstorming/SKILL.md"/>, <skill-ref of=superpowers name="using-git-worktrees" path="skills/using-git-worktrees/SKILL.md"/>, <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md"/>, <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md"/> or <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md"/>, <skill-ref of=superpowers name="test-driven-development" path="skills/test-driven-development/SKILL.md"/>, <skill-ref of=superpowers name="requesting-code-review"/>, <skill-ref of=superpowers name="finishing-a-development-branch" path="skills/finishing-a-development-branch/SKILL.md"/>. Each skill names the next one in its own text. The skills differ from the README: the worktree is created after the plan, per-task review uses its own prompt, and whole-branch review is not in the README list.
   </@order>
   <@owner from="brainstorming" to="design-approval" name="brainstorming" note="skill"/>
   <@owner from="writing-plans" to="writing-plans" name="writing-plans" note="skill"/>
@@ -93,7 +93,7 @@ export type Input = LaneViewInput;
     <@starts>
       The skill is already loaded; this step begins once the human has picked an approach.
     </@starts>
-    <@via>brainstorming/builder-check-prompt.md</@via>
+    <@via><agent-ref of=superpowers name="builder-check-prompt.md" path="skills/brainstorming/builder-check-prompt.md"/></@via>
     <@actor>Subagent, main agent, human</@actor>
     <@input>Design doc</@input>
     <@output>Revised doc and a list of the calls the agent made alone</@output>
@@ -255,7 +255,7 @@ export type Input = LaneViewInput;
       <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md" line="243"/>
     </@starts>
     <@via>
-      <agent-ref of=superpowers name="task-reviewer-prompt.md" path="skills/subagent-driven-development/task-reviewer-prompt.md"/>, references/fix-loop.md
+      <agent-ref of=superpowers name="task-reviewer-prompt.md" path="skills/subagent-driven-development/task-reviewer-prompt.md"/>, <file-ref of=superpowers name="fix-loop.md" path="skills/subagent-driven-development/references/fix-loop.md"/>
     </@via>
     <@actor>Reviewer subagent; controller adjudicates</@actor>
     <@input>Brief, report, diff</@input>
@@ -295,7 +295,7 @@ export type Input = LaneViewInput;
       <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md" line="95,324"/>
       <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md" line="238"/>
     </@starts>
-    <@via>requesting-code-review/code-reviewer.md, references/final-review.md</@via>
+    <@via><agent-ref of=superpowers name="code-reviewer.md" path="skills/requesting-code-review/code-reviewer.md"/>, <file-ref of=superpowers name="final-review.md" path="skills/subagent-driven-development/references/final-review.md"/></@via>
     <@actor>
       Reviewer subagent; one fix subagent (subagent mode) or the main agent with no re-review (inline mode)
     </@actor>
@@ -437,7 +437,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>model</@by>
     <@how>
-      Controller appends the completion line, marks the todo, and when 'every task is complete, read references/final-review.md and follow it'.
+      Controller appends the completion line, marks the todo, and when 'every task is complete, read <file-ref of=superpowers name="final-review.md" path="skills/subagent-driven-development/references/final-review.md"/> and follow it'.
     </@how>
     <@bound>none stated</@bound>
     <@source>
@@ -494,7 +494,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>model</@by>
     <@how>
-      Controller reads references/fix-loop.md before every round. Rounds 1-3 resume the original implementer with the findings verbatim; rounds 4-5 dispatch a fresh implementer on a more capable model. Each round ends with a scoped re-review. Minor findings and plan-mandated conflicts leave the loop. At the cap the controller adjudicates each open finding itself and parks it with a ledgered ruling. The controller never fixes itself.
+      Controller reads <file-ref of=superpowers name="fix-loop.md" path="skills/subagent-driven-development/references/fix-loop.md"/> before every round. Rounds 1-3 resume the original implementer with the findings verbatim; rounds 4-5 dispatch a fresh implementer on a more capable model. Each round ends with a scoped re-review. Minor findings and plan-mandated conflicts leave the loop. At the cap the controller adjudicates each open finding itself and parks it with a ledgered ruling. The controller never fixes itself.
     </@how>
     <@bound>5 fix rounds per task; adjudication only at the cap</@bound>
     <@source>
