@@ -44,7 +44,12 @@ export function validateLane(lane: Lane): ContentProblem[] {
 		if (outside(owner.from, lane) || outside(owner.to, lane))
 			report(`the owner "${owner.name}" names a step that is not in this lane.`);
 	}
+	const pairs = new Set<string>();
 	for (const c of lane.connectors) {
+		const pair = `${c.fromId ?? c.from}~${c.toId ?? c.to}`;
+		if (pairs.has(pair))
+			report(`the connector "${c.fromId ?? c.from}" to "${c.toId ?? c.to}" is given twice.`);
+		pairs.add(pair);
 		if (outside(c.from, lane) || outside(c.to, lane)) {
 			const ends = `"${c.fromId ?? c.from}" to "${c.toId ?? c.to}"`;
 			report(`the connector ${ends} has an endpoint that is not a step of this lane.`);

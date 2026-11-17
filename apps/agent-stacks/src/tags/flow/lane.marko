@@ -18,7 +18,7 @@ export type Input = LaneViewInput;
   <section class="lane" id=lane.id data-lane>
     <header class="lane-head">
       <h2 class="lane-name">${lane.name}</h2>
-      <p class="lane-by">
+      <p class="lane-by" data-lane-by>
         <if=lane.byContent><${lane.byContent}/></if><else>${lane.by}</else>
         <if=lane.status> · ${lane.status}</if>
       </p>

@@ -53,21 +53,27 @@ describe("a lane with a content problem", () => {
 		expect(html).not.toContain("data-step");
 	});
 
-	it("reports a line on a directory as a content problem (D22)", () => {
+	it("shows a directory row's name link to the tree and a slot with the parent file's line (D22)", () => {
 		const html = render(Dir, { view: "panels" });
-		expect(html).toMatch(/<pre data-content-error>[^<]*child\.md[^<]*directory/);
-		expect(html).not.toContain("data-panel");
+		const [name] = tagsWith(html, "data-ref=playbook", "/tree/");
+		expect(name).toContain("skills/poteto-mode/playbooks/");
+		const [slot] = tagsWith(html, "data-slot");
+		expect(slot).toContain("data-lines=108");
+		expect(slot).toContain("skills/poteto-mode/SKILL.md?plain=1#L108");
 	});
 });
 
 describe("a lane's `by`", () => {
 	it("shows an attribute tag's reference tag, and the text after it, where the text form shows", () => {
 		const html = render(By, { view: "flow" });
-		const by = /<p class=lane-by>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+		const by = /<p class=lane-by data-lane-by>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
 		expect(by).toContain("data-ref=playbook");
 		expect(text(by)).toBe("bug-fix.md · a playbook");
 		expect(
-			text(/<p class=lane-by>([\s\S]*?)<\/p>/.exec(render(Ok, { view: "flow" }))?.[1] ?? ""),
+			text(
+				/<p class=lane-by data-lane-by>([\s\S]*?)<\/p>/.exec(render(Ok, { view: "flow" }))?.[1] ??
+					"",
+			),
 		).toBe("nobody");
 	});
 });

@@ -6,7 +6,7 @@ export interface Input {
 }
 
 <const/row=input.row/>
-<const/cite=row.cite && row.cite.path && !row.cite.path.endsWith("/") ? row.cite : undefined/>
+<const/cite=row.cite?.path ? row.cite : undefined/>
 <span class="row-line">
   <span class="row-at">
     <if=cite && input.of>

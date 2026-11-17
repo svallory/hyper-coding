@@ -3,9 +3,9 @@ import type { LaneViewInput } from "../../src/model/types";
 export type Input = LaneViewInput;
 
 <lane ...input id="demo" name="Demo" by="nobody" source=pstack>
-  <@step id="dir" title="Directory step" phrase="Cites a directory" group="plan">
-    <@row kind="playbook" name="playbooks" path="skills/playbooks/">
-      <@row kind="playbook" name="child.md" path="skills/playbooks/child.md" at="3"/>
+  <@step id="dir" title="Directory step" phrase="Names a directory" group="plan">
+    <@row kind="skill" name="poteto-mode" path="skills/poteto-mode/SKILL.md">
+      <@row kind="playbook" name="playbooks" path="skills/poteto-mode/playbooks/" at="108"/>
     </@row>
   </@step>
 </lane>

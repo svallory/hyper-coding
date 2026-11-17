@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_TREE_DEPTH } from "../../src/model/constants";
-import type { Lane, Row, Step } from "../../src/model/types";
+import { normalizeLane } from "../../src/model/normalize";
+import type { Lane, LaneViewInput, Row, Step } from "../../src/model/types";
 import { validateLane } from "../../src/model/validate";
 
 const row = (over: Partial<Row> = {}): Row => ({
@@ -92,23 +93,41 @@ describe("tree depth (D13, C-8)", () => {
 			expect(problem.message).toContain(word);
 	});
 
-	it("does not count a choice group as a level", () => {
-		const cite = { path: "skills/alpha/SKILL.md", lines: "1" };
-		const alt = (name: string, depth: number, rows: Row[] = []) =>
-			row({ depth, name, cite: depth ? cite : undefined, rows });
-		// root(0) > choice > two alternatives (1) > ... down to depth 4, below a choice at every level.
-		let deepest = [alt("a4", 4), alt("b4", 4)];
-		for (let depth = 3; depth >= 1; depth--)
-			deepest = [
-				alt(`a${depth}`, depth, [row({ depth, choice: "pick", rows: deepest })]),
-				alt(`b${depth}`, depth),
-			];
-		const root = row({
-			depth: 0,
+	// Built through normalizeLane: the depth arithmetic for a choice lives there.
+	const rawRow = (name: string, row?: unknown) => ({
+		kind: "skill",
+		name,
+		path: `skills/${name}/SKILL.md`,
+		at: "1",
+		row,
+	});
+	/** A root, then a choice at every level; the alternatives of the last choice are at `deepest`. */
+	const throughChoices = (deepest: number) => {
+		let alts: unknown[] = [rawRow(`a${deepest}`), rawRow(`b${deepest}`)];
+		for (let depth = deepest - 1; depth >= 1; depth--)
+			alts = [rawRow(`a${depth}`, { choice: "pick", row: alts }), rawRow(`b${depth}`)];
+		const root = {
+			kind: "skill",
 			name: "root",
-			rows: [row({ depth: 1, choice: "pick", rows: deepest })],
-		});
-		expect(validateLane(withRows(root))).toEqual([]);
+			path: "skills/root/SKILL.md",
+			row: { choice: "pick", row: alts },
+		};
+		return normalizeLane({
+			id: "demo",
+			name: "Demo",
+			step: { id: "first", title: "First step", phrase: "Does it", group: "plan", row: root },
+		} as unknown as LaneViewInput);
+	};
+
+	it("does not count a choice group as a level", () => {
+		const deepAlt = throughChoices(MAX_TREE_DEPTH).steps[0].rows[0].rows[0].rows[0];
+		expect(deepAlt.depth).toBe(1);
+		expect(validateLane(throughChoices(MAX_TREE_DEPTH))).toEqual([]);
+		const problems = validateLane(throughChoices(MAX_TREE_DEPTH + 1));
+		expect(problems.map((p) => p.row)).toEqual([
+			`a${MAX_TREE_DEPTH + 1}`,
+			`b${MAX_TREE_DEPTH + 1}`,
+		]);
 	});
 });
 
@@ -124,6 +143,18 @@ describe("structure rules (C-20)", () => {
 			"a connector endpoint exists",
 			lane({ connectors: [connector(0, -1, ["first", "nowhere"])] }),
 			/"first" to "nowhere".*not a step/,
+		],
+		[
+			"an owner names a step of the lane",
+			lane({ owners: [{ from: 0, to: -1, name: "ghost" }] }),
+			/owner "ghost" names a step that is not in this lane/,
+		],
+		[
+			"a connector is given once",
+			lane({
+				connectors: [connector(0, 1, ["first", "second"]), connector(0, 1, ["first", "second"])],
+			}),
+			/connector "first" to "second" is given twice/,
 		],
 		[
 			"a hand-off names a lane by its slug",
