@@ -1,0 +1,10 @@
+import type { LaneViewInput } from "../../src/model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="demo" name="Demo" by="nobody">
+  <@step id="a" title="Title a" phrase="Phrase a" group="plan"/>
+  <@step id="b" title="Title b" phrase="Phrase b" group="build" human/>
+  <@connector from="a" to="b" manual>
+    <@when>The operator says go.</@when>
+  </@connector>
+</lane>

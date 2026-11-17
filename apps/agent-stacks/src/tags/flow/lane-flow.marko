@@ -1,0 +1,65 @@
+import { layoutLane } from "../../model/layout";
+import type { Lane } from "../../model/types";
+
+export interface Input {
+  lane: Lane;
+}
+
+<const/lane=input.lane/>
+<const/laid=layoutLane(lane.connectors)/>
+<section class="lane" id=lane.id data-lane>
+  <header class="lane-head">
+    <h2 class="lane-name">${lane.name}</h2>
+    <p class="lane-by" data-lane-by>
+      <if=lane.byContent><${lane.byContent}/></if><else>${lane.by}</else>
+      <if=lane.status> · ${lane.status}</if>
+    </p>
+    <if=lane.summary><p class="lane-summary"><${lane.summary}/></p></if>
+    <if=lane.order>
+      <p class="lane-order">
+        <strong>${lane.order.label}</strong> <em>${lane.order.lead}</em>.
+        <${lane.order.content}/>
+      </p>
+    </if>
+  </header>
+  <div class="flow-scroll">
+    <div class="graph" data-graph style=`--cols: ${lane.steps.length}; --band-above: ${laid.aboveHeight}px; --band-below: ${laid.belowHeight}px`>
+      <for|owner| of=lane.owners>
+        <owner-header owner=owner/>
+      </for>
+      <for|step| of=lane.steps>
+        <step-node lane=lane step=step/>
+      </for>
+      <for|connector| of=laid.connectors>
+        <flow-connector lane=lane connector=connector/>
+      </for>
+    </div>
+  </div>
+</section>
+
+<style>
+  .lane {
+    margin-bottom: 2.5rem;
+  }
+  .lane-name {
+    margin: 0;
+  }
+  .lane-by {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+  /* The graph scrolls inside its own box; the page never does. */
+  .flow-scroll {
+    max-width: 100%;
+    margin-top: 0.75rem;
+    padding-bottom: 0.5rem;
+    overflow-x: auto;
+  }
+  .graph {
+    display: grid;
+    grid-template-columns: repeat(var(--cols), 152px);
+    grid-template-rows: auto var(--band-above) auto var(--band-below);
+    width: max-content;
+    padding: 0 0 0.5rem;
+  }
+</style>
