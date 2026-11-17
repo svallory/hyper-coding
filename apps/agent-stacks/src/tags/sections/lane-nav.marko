@@ -1,11 +1,11 @@
 export interface Input {
   label: string;
   title?: string;
-  /** Lane links outside any group (each lane's `view="nav"`). */
+  /** Lane entries outside any group (each lane's `view="nav"`). */
   content?: Marko.Body;
-  /** Titled groups of lane links; a group with no body renders nothing. */
+  /** Titled groups of lane entries; a group with no body renders nothing. */
   group?: Marko.AttrTag<{ title: string; content?: Marko.Body }>;
-  /** A link to a section of the same page. */
+  /** An entry for a section of the same page. */
   section?: Marko.AttrTag<{ to: string; content?: Marko.Body }>;
 }
 
