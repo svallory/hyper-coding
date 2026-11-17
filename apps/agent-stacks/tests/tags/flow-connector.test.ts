@@ -65,6 +65,7 @@ describe("flow-connector", () => {
 		expect(edge.startsWith("<div")).toBe(true);
 		expect(html).toContain("data-manual-marker");
 		expect(text(html)).toContain("A person triggers this step by hand.");
+		expect(edge).not.toContain("aria-label");
 	});
 
 	it("renders a manual connector with details as a link to its panel and the details as the explanation", () => {
@@ -82,6 +83,26 @@ describe("flow-connector", () => {
 			connector: connector({ from: 3, to: 0, shape: "below" }),
 		});
 		expect(text(html)).toBe("");
+		expect(html).not.toContain("aria-label");
+	});
+
+	it("keeps a link's visible label as its accessible name", () => {
+		const details = { when: (() => {}) as never };
+		const html = render(FlowConnector, {
+			lane,
+			connector: connector({
+				from: 3,
+				to: 0,
+				shape: "below",
+				label: "rework",
+				manual: true,
+				details,
+			}),
+		});
+		const [edge] = tagsWith(html, "data-connector=d~a");
+		expect(edge.startsWith("<a")).toBe(true);
+		expect(edge).not.toContain("aria-label");
+		expect(text(html)).toContain("manual: rework");
 	});
 
 	it("renders an inferred outer back edge as an arc labelled in visible text, with both hooks", () => {
