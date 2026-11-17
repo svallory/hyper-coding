@@ -113,7 +113,8 @@ it("resolves an endpoint that is not a step to -1", () => {
 	const bad = normalizeLane({
 		id: "x",
 		step: { id: "a", title: "A", phrase: "A", group: "plan" },
-		connector: { from: "a", to: "nope" },
+		connector: repeated({ from: "a", to: "nope" }, { from: "nope", to: "a" }),
 	} as unknown as LaneViewInput);
 	expect(bad.connectors[0]).toMatchObject({ from: 0, to: -1, toId: "nope" });
+	expect(bad.connectors[1]).toMatchObject({ from: -1, to: 0, fromId: "nope" });
 });
