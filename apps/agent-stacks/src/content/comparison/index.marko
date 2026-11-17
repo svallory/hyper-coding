@@ -1,6 +1,14 @@
 import Pstack from "./pstack.marko";
 
-static const cols = ["req","base","design","tasks","verify","learn"];
+static const COLUMNS = [
+  { key: "req", label: "Requirements" },
+  { key: "base", label: "Current state" },
+  { key: "design", label: "Design" },
+  { key: "tasks", label: "Task breakdown" },
+  { key: "verify", label: "Verify against requirements" },
+  { key: "learn", label: "Learning kept" },
+];
+static const cols = COLUMNS.map((c) => c.key);
 
 <page-header title="Agent Stack Loops">
   <@lede>The path one piece of work takes from request to merged code in six agent stacks, drawn with one grammar.</@lede>
@@ -43,12 +51,7 @@ static const cols = ["req","base","design","tasks","verify","learn"];
 
 <cover-table id="questions" title="Planning questions each stack answers" laneHeading="Stack">
   <@note>Explicit: a named artifact or section, with a gate. Implicit: done inside another step, with nothing to check.</@note>
-  <@col key="req">Requirements</@col>
-  <@col key="base">Current state</@col>
-  <@col key="design">Design</@col>
-  <@col key="tasks">Task breakdown</@col>
-  <@col key="verify">Verify against requirements</@col>
-  <@col key="learn">Learning kept</@col>
+  <for|c| of=COLUMNS><@col key=c.key>${c.label}</@col></for>
   <Pstack view="cover" cols=cols/>
 </cover-table>
 

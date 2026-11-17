@@ -11,7 +11,7 @@ export interface Input {
   content?: Marko.Body;
 }
 
-<section class="cover-table" id=input.id data-cover-table>
+<section class="cover-table" id=input.id>
   <h2>${input.title}</h2>
   <if=input.note><p class="defn"><${input.note.content}/></p></if>
   <div class="table-box">
@@ -19,7 +19,7 @@ export interface Input {
       <thead>
         <tr>
           <th scope="col">${input.laneHeading}</th>
-          <for|c| of=input.col><th scope="col" data-col=c.key><${c.content}/></th></for>
+          <for|c| of=input.col><th scope="col"><${c.content}/></th></for>
         </tr>
       </thead>
       <tbody><${input.content}/></tbody>

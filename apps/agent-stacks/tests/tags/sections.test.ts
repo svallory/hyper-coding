@@ -17,14 +17,9 @@ const inner = (html: string, tag: string): string[] =>
 	);
 
 describe("lane-nav", () => {
-	const html = render("nav");
-
-	it("renders each group with its title and what it holds, in order", () => {
+	it("renders each group with its title and what it holds, in order, and nothing for an empty group", () => {
+		const html = render("nav");
 		expect(text(html)).toBe("Lanes Entry Router Understand Investigation");
-	});
-
-	it("renders nothing for a group that holds nothing", () => {
-		expect(html).not.toContain("Nothing here");
 		expect(html.match(/data-nav-group/g)).toHaveLength(2);
 	});
 });
@@ -55,27 +50,38 @@ describe("cover-table", () => {
 });
 
 describe("legend-key", () => {
+	// [label, the marker the entry must draw]
+	const expected: [string, string][] = [
+		["Plan", "data-swatch=plan"],
+		["Build", "data-swatch=build"],
+		["Check", "data-swatch=check"],
+		["Ship", "data-swatch=ship"],
+		["Learn", "data-swatch=learn"],
+		["A human decides", "data-swatch=human"],
+		["a human is here", "data-icon=human"],
+		["a warning inside", "data-ui-icon=warning"],
+		["next step", "data-line=solid"],
+		["feeds the next", "data-line=dashed"],
+		["our inference", "data-line=dotted"],
+		["operator asks", "data-line=manual"],
+		["a choice", "data-marker=pick"],
+		["name column heading", "key-sample"],
+		["files", "data-icon=file"],
+		["code", "data-icon=code"],
+	];
 	const html = render("legend");
 	const entries = html.split("data-key-entry").slice(1);
 
-	it("renders one entry per item with its label, grouped under the group's title", () => {
-		expect(entries.map((e) => text(`<span ${e}`.split("</span></span>")[0]))).toEqual([
-			"Plan",
-			"a human decides",
-			"feeds the next",
-			"a choice",
-			"files",
-			"code",
-		]);
-		expect(inner(html, "b")).toEqual(["Steps", "Connectors"]);
-	});
-
-	it("draws each variant's marker", () => {
-		expect(html).toContain("data-swatch=plan");
-		expect(html).toContain("data-icon=human");
-		expect(html).toContain("data-line=dashed");
-		expect(html).toContain("data-marker=pick");
-		expect(html).toContain("data-icon=file");
-		expect(html).toContain("data-icon=code");
+	it("draws every entry with its label and its marker, under the group's title", () => {
+		expect(entries.map((e) => [text(`<span ${e}`.split("</span></span>")[0]), e])).toHaveLength(
+			expected.length,
+		);
+		expect(entries).toHaveLength(expected.length);
+		entries.forEach((e, i) => {
+			const [label, marker] = expected[i];
+			expect(text(`<span ${e}`.split("</span></span>")[0])).toBe(label);
+			expect(e).toContain(marker);
+		});
+		expect(inner(html, "b")).toEqual(["Steps", "Connectors", "What runs a step"]);
 	});
 });

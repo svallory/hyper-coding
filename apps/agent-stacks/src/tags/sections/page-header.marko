@@ -5,12 +5,12 @@ export interface Input {
   how?: Marko.AttrTag<{ content?: Marko.Body }>;
 }
 
-<header class="page-header" data-page-header>
+<header class="page-header">
   <h1>${input.title}</h1>
   <if=input.lede><p class="lede"><${input.lede.content}/></p></if>
   <if=input.meta><p class="meta"><${input.meta.content}/></p></if>
 </header>
-<if=input.how><p class="how" data-how><${input.how.content}/></p></if>
+<if=input.how><p class="how"><${input.how.content}/></p></if>
 
 <style>
   .page-header {

@@ -12,7 +12,7 @@ export interface Input {
 <const/groups=[...(input.group ?? [])].filter((g) => g.content)/>
 
 <if=input.content || groups.length || input.section>
-  <nav class="lane-nav" aria-label=input.label data-lane-nav>
+  <nav class="lane-nav" aria-label=input.label>
     <if=input.title><strong class="nav-title">${input.title}</strong></if>
     <for|g| of=groups>
       <div class="nav-row" data-nav-group=g.title>
@@ -24,7 +24,7 @@ export interface Input {
       <div class="nav-row">
         <${input.content}/>
         <for|s| of=input.section>
-          <a href=`#${s.to}` data-section-link=s.to><${s.content}/></a>
+          <a href=`#${s.to}`><${s.content}/></a>
         </for>
       </div>
     </if>

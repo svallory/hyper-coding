@@ -28,13 +28,25 @@ export interface Input {
   <legend-key label="Key">
     <@group title="Steps">
       <@item swatch="plan">Plan</@item>
-      <@item icon="human">a human decides</@item>
+      <@item swatch="build">Build</@item>
+      <@item swatch="check">Check</@item>
+      <@item swatch="ship">Ship</@item>
+      <@item swatch="learn">Learn</@item>
+      <@item swatch="human">A human decides</@item>
+      <@item icon="human">a human is here</@item>
+      <@item icon="warning">a warning inside</@item>
     </@group>
     <@group title="Connectors">
+      <@item line="solid">next step</@item>
       <@item line="dashed">feeds the next</@item>
+      <@item line="dotted">our inference</@item>
+      <@item line="manual">operator asks</@item>
       <@item marker="pick">a choice</@item>
     </@group>
-    <@item icon="file">files</@item>
-    <@item icon="code">code</@item>
+    <@group title="What runs a step">
+      <@item sample="name">column heading</@item>
+      <@item icon="file">files</@item>
+      <@item icon="code">code</@item>
+    </@group>
   </legend-key>
 </else>

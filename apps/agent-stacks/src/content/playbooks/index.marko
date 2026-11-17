@@ -31,7 +31,7 @@
   <@group title="Session"/>
 </lane-nav>
 
-<!-- The lanes go here, one `view="flow"` each, in the order of the navigation groups. -->
+<!-- The lanes go here, under one `<h2>` per navigation group (Entry, Understand, Change code, Skills, Pull requests, Long runs, Session), one `view="flow"` each. -->
 
 <reading-list id="reading" title="My reading">
   <@item>A playbook is not a skill. It is a plain file of 8 to 25 lines (320 lines for all 22) with no frontmatter, inside the poteto-mode skill folder. The plugin manifest registers only skills/ and agents/, so the harness does not know playbooks exist: no description to match on, no slash command, no hook. The only way in is poteto-mode, which a human must type (disable-model-invocation: true). Its last section tells the model to open one file with an ordinary file read and copy the steps into the todo tool. Subagents never pick one: "The chat that receives /poteto-mode owns the playbook, the todo list, and every Task spawn."</@item>
