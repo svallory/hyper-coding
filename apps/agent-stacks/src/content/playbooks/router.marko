@@ -61,7 +61,7 @@ export type Input = LaneViewInput;
   <@step id="run-playbook" title="Run playbook" phrase="Follow its steps from the todo list"
     group="build">
     <@what>
-      The chat that received <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> runs the playbook itself. Subagents it spawns are <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/>, in the background, each started with "Read &lt;path>/worker.md before anything else."
+      The chat that received <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> runs the playbook itself. Subagents it spawns are <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/>, in the background, each started with "Read &lt;path>/<file-ref of=pstack name="worker.md" path="skills/poteto-mode/worker.md"/> before anything else."
     </@what>
     <@actor>Main agent and its subagents</@actor>
     <@input>The playbook's numbered steps</@input>
