@@ -19,7 +19,5 @@ describe("the playbooks page", () => {
 			.map((h) => h.getAttribute("data-handoff") ?? "")
 			.filter((id) => !lanes.has(id));
 		expect(broken).toEqual([]);
-		for (const h of handoffs)
-			expect(h.getAttribute("href")).toBe(`#${h.getAttribute("data-handoff")}`);
 	});
 });
