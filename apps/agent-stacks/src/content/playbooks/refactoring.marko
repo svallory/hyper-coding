@@ -5,7 +5,7 @@ export type Input = LaneViewInput;
 <lane ...input id="refactoring" name="Refactoring" source=pstack>
   <@by><playbook-ref of=pstack name="refactoring" path="skills/poteto-mode/playbooks/refactoring.md"/></@by>
   <@summary>
-    "You own the contract. The structure changes. The behavior does not." A redesign routes to Feature; large structural work routes to figure-it-out.
+    "You own the contract. The structure changes. The behavior does not." A redesign routes to <playbook-ref of=pstack name="Feature" path="skills/poteto-mode/playbooks/feature.md"/>; large structural work routes to <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/>.
   </@summary>
   <@order label="Ends with" lead="Opening a PR">
     Reply: the structure that changed, the pin you held it against, the equivalence proof, the reader-load delta, what shipped and what got reverted. No new behavior.
