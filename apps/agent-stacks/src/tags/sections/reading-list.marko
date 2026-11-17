@@ -4,7 +4,7 @@ export interface Input {
   item?: Marko.AttrTag<{ content?: Marko.Body }>;
 }
 
-<section class="reading-list" id=input.id data-reading-list>
+<section class="reading-list" id=input.id>
   <h2>${input.title}</h2>
   <ul>
     <for|it| of=input.item><li><${it.content}/></li></for>
