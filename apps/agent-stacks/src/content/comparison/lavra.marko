@@ -8,7 +8,7 @@ export type Input = LaneViewInput;
     Extends Compound Engineering. The plan is an epic with child issues ("beads") in the Beads tracker, not a file. A hook asks a subagent to log what it learned before it stops, but does not check that it did.
   </@summary>
   <@order label="Order, per the author" lead="recommended in docs; the human types each command">
-    "Most of the time, you type three commands": <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/>, /lavra-work, <command-ref of=lavra name="lavra-ship" path="plugins/lavra/commands/lavra-ship.md"/>, with <command-ref of=lavra name="lavra-qa" path="plugins/lavra/commands/lavra-qa.md"/> optional for web apps (README.md). Inside <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/> the phases chain: "Brainstorm → Plan → Research → Revise → CEO Review → Eng Review → Lock". Review and the fix loop run inside /lavra-work. /lavra-quick is a shortcut for small tasks.
+    "Most of the time, you type three commands": <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/>, <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/>, <command-ref of=lavra name="lavra-ship" path="plugins/lavra/commands/lavra-ship.md"/>, with <command-ref of=lavra name="lavra-qa" path="plugins/lavra/commands/lavra-qa.md"/> optional for web apps (README.md). Inside <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/> the phases chain: "Brainstorm → Plan → Research → Revise → CEO Review → Eng Review → Lock". Review and the fix loop run inside <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/>. <command-ref of=lavra name="lavra-quick"/> is a shortcut for small tasks.
   </@order>
   <@owner from="brainstorm" to="review-lock" name="lavra-design" note="command; chains six phases"/>
   <@owner from="execute-beads" to="review-goal-verify" name="lavra-work"
@@ -247,7 +247,7 @@ export type Input = LaneViewInput;
       Beads run alone, in sequence, or in waves of parallel subagents grouped so no two touch the same file. Subagents may not commit. The single-bead path pushes and opens its own PR.
     </@what>
     <@starts>
-      The human types /lavra-work with a bead, an epic or nothing; <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/> ends by offering it.
+      The human types <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/> with a bead, an epic or nothing; <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/> ends by offering it.
       <file-ref of=lavra name="README.md" path="README.md" line="66-70"/>
       <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md" line="569-570"/>
     </@starts>
@@ -535,7 +535,7 @@ export type Input = LaneViewInput;
   </@connector>
 
   <@connector from="review-lock" to="execute-beads" manual enforced="prompt">
-    <@when>Human types /lavra-work after phase 6 locks the plan.</@when>
+    <@when>Human types <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/> after phase 6 locks the plan.</@when>
     <@by>human</@by>
     <@how>Separate command; nothing in code checks the plan-reviewed label.</@how>
     <@bound>none stated</@bound>
