@@ -59,7 +59,7 @@ export interface Row {
 	rows: Row[];
 }
 
-export type StepField = "what" | "via" | "actor" | "input" | "output" | "starts" | "gate" | "back";
+type StepField = "what" | "via" | "actor" | "input" | "output" | "starts" | "gate" | "back";
 
 export interface Step {
 	id: string;
@@ -74,7 +74,7 @@ export interface Step {
 	rows: Row[];
 }
 
-export type ConnectorDetail = "when" | "by" | "how" | "bound" | "source";
+type ConnectorDetail = "when" | "by" | "how" | "bound" | "source";
 
 export interface Connector {
 	from: number;

@@ -28,11 +28,18 @@ describe("assertDist", () => {
 		expect(assertDist(dir)).toEqual([]);
 	});
 
-	it("names a missing page", () => {
-		put("index.html", "<h1>a</h1>");
+	it.each([
+		["a missing playbooks page", { "index.html": "<h1>a</h1>" }, "pstack/playbooks/index.html"],
+		[
+			"an empty home page",
+			{ "index.html": "", "pstack/playbooks/index.html": "<h1>b</h1>" },
+			"index.html",
+		],
+	])("names the page for %s", (_name, files, page) => {
+		for (const [rel, html] of Object.entries(files)) put(rel, html);
 		const problems = assertDist(dir);
 		expect(problems).toHaveLength(1);
-		expect(problems[0]).toContain("pstack/playbooks/index.html");
+		expect(problems[0]).toContain(page);
 	});
 
 	it("names a page with a content error", () => {

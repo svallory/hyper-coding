@@ -65,6 +65,9 @@ describe.each([
 });
 
 it("the system-dark rule matches the explicit dark rule", () => {
+	expect(Object.keys(media).sort()).toEqual(
+		Object.keys(declarations(rule(':root[data-theme="dark"]'))).sort(),
+	);
 	for (const [name, value] of Object.entries(media)) {
 		expect(dark[name], name).toBe(value);
 	}
