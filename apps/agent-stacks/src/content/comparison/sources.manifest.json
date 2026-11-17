@@ -1,4 +1,726 @@
 {
+	"aihero": {
+		"docs/engineering/pr.md": {
+			"lines": 79
+		},
+		"docs/engineering/retro.md": {
+			"lines": 81
+		},
+		"docs/engineering/to-spec.md": {
+			"lines": 81
+		},
+		"docs/engineering/to-tickets.md": {
+			"lines": 99
+		},
+		"skills/engineering/ask-matt/PHASE-BOUNDARIES.md": {
+			"lines": 55
+		},
+		"skills/engineering/ask-matt/SKILL.md": {
+			"lines": 97
+		},
+		"skills/engineering/code-review/SKILL.md": {
+			"lines": 89
+		},
+		"skills/engineering/codebase-design/DEEPENING.md": {
+			"lines": 37
+		},
+		"skills/engineering/codebase-design/DESIGN-IT-TWICE.md": {
+			"lines": 44
+		},
+		"skills/engineering/codebase-design/SKILL.md": {
+			"lines": 114
+		},
+		"skills/engineering/domain-modeling/ADR-FORMAT.md": {
+			"lines": 47
+		},
+		"skills/engineering/domain-modeling/GLOSSARY-FORMAT.md": {
+			"lines": 60
+		},
+		"skills/engineering/domain-modeling/SKILL.md": {
+			"lines": 74
+		},
+		"skills/engineering/grill-with-docs/SKILL.md": {
+			"lines": 7
+		},
+		"skills/engineering/implement-spec/SKILL.md": {
+			"lines": 42
+		},
+		"skills/engineering/implement/SKILL.md": {
+			"lines": 17
+		},
+		"skills/engineering/pr/SKILL.md": {
+			"lines": 170
+		},
+		"skills/engineering/prototype/LOGIC.md": {
+			"lines": 67
+		},
+		"skills/engineering/prototype/SKILL.md": {
+			"lines": 26
+		},
+		"skills/engineering/prototype/UI.md": {
+			"lines": 112
+		},
+		"skills/engineering/retro/SKILL.md": {
+			"lines": 44
+		},
+		"skills/engineering/setup-matt-pocock-skills/": {
+			"dir": true
+		},
+		"skills/engineering/setup-matt-pocock-skills/SKILL.md": {
+			"lines": 120
+		},
+		"skills/engineering/tdd/SKILL.md": {
+			"lines": 38
+		},
+		"skills/engineering/tdd/mocking.md": {
+			"lines": 59
+		},
+		"skills/engineering/tdd/tests.md": {
+			"lines": 77
+		},
+		"skills/engineering/to-spec/SKILL.md": {
+			"lines": 75
+		},
+		"skills/engineering/to-tickets/SKILL.md": {
+			"lines": 105
+		},
+		"skills/productivity/grilling/SKILL.md": {
+			"lines": 30
+		},
+		"skills/productivity/handoff/SKILL.md": {
+			"lines": 16
+		},
+		"skills/productivity/writing-for-agents/SKILL-MECHANICS.md": {
+			"lines": 22
+		},
+		"skills/productivity/writing-for-agents/SKILL.md": {
+			"lines": 81
+		}
+	},
+	"ce": {
+		"skills/ce-babysit-pr/SKILL.md": {
+			"lines": 60
+		},
+		"skills/ce-babysit-pr/references/intake.md": {
+			"lines": 76
+		},
+		"skills/ce-babysit-pr/references/pipeline.md": {
+			"lines": 17
+		},
+		"skills/ce-babysit-pr/references/watch-loop.md": {
+			"lines": 236
+		},
+		"skills/ce-babysit-pr/scripts/intake-overlap": {
+			"lines": 227
+		},
+		"skills/ce-babysit-pr/scripts/pr-snapshot": {
+			"lines": 3675
+		},
+		"skills/ce-brainstorm/SKILL.md": {
+			"lines": 69
+		},
+		"skills/ce-brainstorm/references/agents/slack-researcher.md": {
+			"lines": 125
+		},
+		"skills/ce-brainstorm/references/approaches.md": {
+			"lines": 57
+		},
+		"skills/ce-brainstorm/references/brainstorm-sections.md": {
+			"lines": 462
+		},
+		"skills/ce-brainstorm/references/dialogue.md": {
+			"lines": 89
+		},
+		"skills/ce-brainstorm/references/handoff.md": {
+			"lines": 187
+		},
+		"skills/ce-brainstorm/references/phase-0.md": {
+			"lines": 104
+		},
+		"skills/ce-brainstorm/references/plan-write.md": {
+			"lines": 32
+		},
+		"skills/ce-brainstorm/references/reasoning-elevation.md": {
+			"lines": 136
+		},
+		"skills/ce-brainstorm/references/visual-probes.md": {
+			"lines": 164
+		},
+		"skills/ce-brainstorm/scripts/elevation-dispatch.sh": {
+			"lines": 327
+		},
+		"skills/ce-brainstorm/scripts/light-webserver.js": {
+			"lines": 1275
+		},
+		"skills/ce-brainstorm/scripts/packs-resolve.py": {
+			"lines": 737
+		},
+		"skills/ce-brainstorm/scripts/peer-job-runner.py": {
+			"lines": 2594
+		},
+		"skills/ce-code-review/SKILL.md": {
+			"lines": 41
+		},
+		"skills/ce-code-review/references/cross-model-review.md": {
+			"lines": 195
+		},
+		"skills/ce-code-review/references/depth-paths.md": {
+			"lines": 42
+		},
+		"skills/ce-code-review/references/dispatch-reviewers.md": {
+			"lines": 138
+		},
+		"skills/ce-code-review/references/finish-input.md": {
+			"lines": 119
+		},
+		"skills/ce-code-review/references/finish-merge.md": {
+			"lines": 72
+		},
+		"skills/ce-code-review/references/finish-report.md": {
+			"lines": 141
+		},
+		"skills/ce-code-review/references/intent-and-plan.md": {
+			"lines": 75
+		},
+		"skills/ce-code-review/references/modes-and-output.md": {
+			"lines": 164
+		},
+		"skills/ce-code-review/references/personas/": {
+			"dir": true
+		},
+		"skills/ce-code-review/references/scope.md": {
+			"lines": 188
+		},
+		"skills/ce-code-review/references/select-and-route.md": {
+			"lines": 89
+		},
+		"skills/ce-code-review/references/validator-batch-template.md": {
+			"lines": 69
+		},
+		"skills/ce-code-review/scripts/cross-model-adversarial-review.sh": {
+			"lines": 1384
+		},
+		"skills/ce-code-review/scripts/findings-mechanics.py": {
+			"lines": 274
+		},
+		"skills/ce-code-review/scripts/peer-job-runner.py": {
+			"lines": 2594
+		},
+		"skills/ce-code-review/scripts/review-scope.py": {
+			"lines": 425
+		},
+		"skills/ce-commit-push-pr/SKILL.md": {
+			"lines": 59
+		},
+		"skills/ce-commit-push-pr/references/": {
+			"dir": true
+		},
+		"skills/ce-commit-push-pr/references/apply-and-handoff.md": {
+			"lines": 93
+		},
+		"skills/ce-compound/SKILL.md": {
+			"lines": 77
+		},
+		"skills/ce-compound/references/agents/session-historian.md": {
+			"lines": 82
+		},
+		"skills/ce-compound/references/assembly.md": {
+			"lines": 127
+		},
+		"skills/ce-compound/references/concepts-vocabulary.md": {
+			"lines": 114
+		},
+		"skills/ce-compound/references/enhancement.md": {
+			"lines": 42
+		},
+		"skills/ce-compound/references/form.md": {
+			"lines": 27
+		},
+		"skills/ce-compound/references/grounding-validation.md": {
+			"lines": 89
+		},
+		"skills/ce-compound/references/lightweight.md": {
+			"lines": 62
+		},
+		"skills/ce-compound/references/modes.md": {
+			"lines": 25
+		},
+		"skills/ce-compound/references/refresh-and-discoverability.md": {
+			"lines": 96
+		},
+		"skills/ce-compound/references/research.md": {
+			"lines": 144
+		},
+		"skills/ce-compound/references/session-history.md": {
+			"lines": 74
+		},
+		"skills/ce-compound/scripts/packs-resolve.py": {
+			"lines": 737
+		},
+		"skills/ce-compound/scripts/session-history/": {
+			"dir": true
+		},
+		"skills/ce-compound/scripts/validate-doc-claims.py": {
+			"lines": 498
+		},
+		"skills/ce-compound/scripts/validate-frontmatter.py": {
+			"lines": 137
+		},
+		"skills/ce-debug/SKILL.md": {
+			"lines": 128
+		},
+		"skills/ce-doc-review/SKILL.md": {
+			"lines": 75
+		},
+		"skills/ce-doc-review/references/cross-model-review.md": {
+			"lines": 214
+		},
+		"skills/ce-doc-review/references/depth.md": {
+			"lines": 39
+		},
+		"skills/ce-doc-review/references/personas/": {
+			"dir": true
+		},
+		"skills/ce-doc-review/references/synthesis-and-presentation.md": {
+			"lines": 338
+		},
+		"skills/ce-doc-review/scripts/cross-model-doc-review.sh": {
+			"lines": 1379
+		},
+		"skills/ce-plan/SKILL.md": {
+			"lines": 60
+		},
+		"skills/ce-plan/references/agents/": {
+			"dir": true
+		},
+		"skills/ce-plan/references/deepening-workflow.md": {
+			"lines": 263
+		},
+		"skills/ce-plan/references/final-review.md": {
+			"lines": 135
+		},
+		"skills/ce-plan/references/intake.md": {
+			"lines": 160
+		},
+		"skills/ce-plan/references/plan-handoff.md": {
+			"lines": 118
+		},
+		"skills/ce-plan/references/reasoning-elevation.md": {
+			"lines": 136
+		},
+		"skills/ce-plan/references/research.md": {
+			"lines": 211
+		},
+		"skills/ce-plan/scripts/packs-resolve.py": {
+			"lines": 737
+		},
+		"skills/ce-resolve-pr-feedback/SKILL.md": {
+			"lines": 60
+		},
+		"skills/ce-simplify-code/SKILL.md": {
+			"lines": 74
+		},
+		"skills/ce-simplify-code/references/personas/": {
+			"dir": true
+		},
+		"skills/ce-simplify-code/references/personas/structure-reviewer.md": {
+			"lines": 17
+		},
+		"skills/ce-simplify-code/references/reviewer-dispatch.md": {
+			"lines": 15
+		},
+		"skills/ce-simplify-code/references/single-pass.md": {
+			"lines": 15
+		},
+		"skills/ce-simplify-code/references/standalone-report.md": {
+			"lines": 27
+		},
+		"skills/ce-simplify-code/references/structural-pass.md": {
+			"lines": 40
+		},
+		"skills/ce-simplify-code/scripts/structure-evidence.py": {
+			"lines": 228
+		},
+		"skills/ce-test-browser/SKILL.md": {
+			"lines": 50
+		},
+		"skills/ce-test-browser/references/pipeline-orchestration.md": {
+			"lines": 45
+		},
+		"skills/ce-test-browser/references/route-and-report.md": {
+			"lines": 129
+		},
+		"skills/ce-test-browser/scripts/resolve-port.sh": {
+			"lines": 41
+		},
+		"skills/ce-work/SKILL.md": {
+			"lines": 64
+		},
+		"skills/ce-work/references/agents/figma-design-sync.md": {
+			"lines": 27
+		},
+		"skills/ce-work/references/agents/implementation-worker.md": {
+			"lines": 18
+		},
+		"skills/ce-work/references/cross-model-execution.md": {
+			"lines": 193
+		},
+		"skills/ce-work/references/execution-engines.md": {
+			"lines": 64
+		},
+		"skills/ce-work/references/execution-strategy.md": {
+			"lines": 82
+		},
+		"skills/ce-work/references/implementation-loop.md": {
+			"lines": 110
+		},
+		"skills/ce-work/references/input-triage.md": {
+			"lines": 52
+		},
+		"skills/ce-work/references/return-to-caller.md": {
+			"lines": 36
+		},
+		"skills/ce-work/references/review-findings-followup.md": {
+			"lines": 82
+		},
+		"skills/ce-work/references/shipping-workflow.md": {
+			"lines": 90
+		},
+		"skills/ce-work/references/work-intake.md": {
+			"lines": 66
+		},
+		"skills/ce-work/references/worker-model.md": {
+			"lines": 22
+		},
+		"skills/ce-work/references/workspace-setup.md": {
+			"lines": 27
+		},
+		"skills/ce-work/scripts/": {
+			"dir": true
+		},
+		"skills/ce-work/scripts/cross-model-work.sh": {
+			"lines": 1433
+		},
+		"skills/ce-work/scripts/packs-resolve.py": {
+			"lines": 737
+		},
+		"skills/ce-work/scripts/peer-job-runner.py": {
+			"lines": 2594
+		},
+		"skills/ce-work/scripts/unit-workspace.py": {
+			"lines": 215
+		},
+		"skills/lfg/SKILL.md": {
+			"lines": 57
+		},
+		"skills/lfg/references/intake.md": {
+			"lines": 41
+		},
+		"skills/lfg/references/plan-brief.md": {
+			"lines": 36
+		},
+		"skills/lfg/references/review-followup.md": {
+			"lines": 80
+		},
+		"skills/lfg/references/shipping.md": {
+			"lines": 65
+		},
+		"skills/lfg/references/work-return.md": {
+			"lines": 31
+		}
+	},
+	"lavra": {
+		"README.md": {
+			"lines": 178
+		},
+		"plugins/lavra/agents/": {
+			"dir": true
+		},
+		"plugins/lavra/agents/research/best-practices-researcher.md": {
+			"lines": 132
+		},
+		"plugins/lavra/agents/research/framework-docs-researcher.md": {
+			"lines": 112
+		},
+		"plugins/lavra/agents/research/learnings-researcher.md": {
+			"lines": 269
+		},
+		"plugins/lavra/agents/research/repo-research-analyst.md": {
+			"lines": 158
+		},
+		"plugins/lavra/agents/review/architecture-strategist.md": {
+			"lines": 83
+		},
+		"plugins/lavra/agents/review/code-simplicity-reviewer.md": {
+			"lines": 110
+		},
+		"plugins/lavra/agents/review/goal-verifier.md": {
+			"lines": 110
+		},
+		"plugins/lavra/agents/review/performance-oracle.md": {
+			"lines": 154
+		},
+		"plugins/lavra/agents/review/security-sentinel.md": {
+			"lines": 126
+		},
+		"plugins/lavra/agents/workflow/spec-flow-analyzer.md": {
+			"lines": 145
+		},
+		"plugins/lavra/commands/lavra-design.md": {
+			"lines": 576
+		},
+		"plugins/lavra/commands/lavra-learn.md": {
+			"lines": 191
+		},
+		"plugins/lavra/commands/lavra-qa.md": {
+			"lines": 361
+		},
+		"plugins/lavra/commands/lavra-retro.md": {
+			"lines": 397
+		},
+		"plugins/lavra/commands/lavra-ship.md": {
+			"lines": 335
+		},
+		"plugins/lavra/commands/lavra-work.md": {
+			"lines": 7
+		},
+		"plugins/lavra/hooks/auto-recall.sh": {
+			"lines": 233
+		},
+		"plugins/lavra/hooks/extract-bead-context.sh": {
+			"lines": 87
+		},
+		"plugins/lavra/hooks/hooks.json": {
+			"lines": 47
+		},
+		"plugins/lavra/hooks/knowledge-db.sh": {
+			"lines": 277
+		},
+		"plugins/lavra/hooks/memory-capture.sh": {
+			"lines": 168
+		},
+		"plugins/lavra/hooks/memory-sanitize.sh": {
+			"lines": 318
+		},
+		"plugins/lavra/hooks/memorysanitize/main.go": {
+			"lines": 598
+		},
+		"plugins/lavra/hooks/provision-memory.sh": {
+			"lines": 262
+		},
+		"plugins/lavra/hooks/recall.sh": {
+			"lines": 181
+		},
+		"plugins/lavra/hooks/sanitize-content.sh": {
+			"lines": 48
+		},
+		"plugins/lavra/hooks/subagent-wrapup.sh": {
+			"lines": 45
+		},
+		"plugins/lavra/hooks/teammate-idle-check.sh": {
+			"lines": 29
+		},
+		"plugins/lavra/skills/brainstorming/SKILL.md": {
+			"lines": 187
+		},
+		"plugins/lavra/skills/lavra-brainstorm/SKILL.md": {
+			"lines": 409
+		},
+		"plugins/lavra/skills/lavra-ceo-review/SKILL.md": {
+			"lines": 396
+		},
+		"plugins/lavra/skills/lavra-eng-review/SKILL.md": {
+			"lines": 284
+		},
+		"plugins/lavra/skills/lavra-plan/SKILL.md": {
+			"lines": 573
+		},
+		"plugins/lavra/skills/lavra-research/SKILL.md": {
+			"lines": 288
+		},
+		"plugins/lavra/skills/lavra-review/SKILL.md": {
+			"lines": 565
+		},
+		"plugins/lavra/skills/lavra-review/references/default-agents.md": {
+			"lines": 50
+		},
+		"plugins/lavra/skills/lavra-work-multi/SKILL.md": {
+			"lines": 689
+		},
+		"plugins/lavra/skills/lavra-work-multi/references/subagent-prompt.md": {
+			"lines": 102
+		},
+		"plugins/lavra/skills/lavra-work-single/SKILL.md": {
+			"lines": 554
+		},
+		"plugins/lavra/skills/lavra-work/SKILL.md": {
+			"lines": 208
+		}
+	},
+	"omo": {
+		"docs/guide/overview.md": {
+			"lines": 270
+		},
+		"packages/boulder-state/src/storage/plan-progress.ts": {
+			"lines": 48
+		},
+		"packages/memory-core/src/index.ts": {
+			"lines": 25
+		},
+		"packages/omo-codex/plugin/components/lazycodex-executor-verify/src/state.ts": {
+			"lines": 62
+		},
+		"packages/omo-opencode/src/hooks/atlas/idle-event.ts": {
+			"lines": 176
+		},
+		"packages/omo-opencode/src/hooks/atlas/tool-progress.ts": {
+			"lines": 73
+		},
+		"packages/omo-senpi/AGENTS.md": {
+			"lines": 112
+		},
+		"packages/omo-senpi/skills/mass-ulw/SKILL.md": {
+			"lines": 97
+		},
+		"packages/omo-senpi/skills/mass-ulw/references/planning.md": {
+			"lines": 149
+		},
+		"packages/omo-senpi/skills/ultrawork/SKILL.md": {
+			"lines": 584
+		},
+		"packages/omo-senpi/skills/ulw-plan/SKILL.md": {
+			"lines": 142
+		},
+		"packages/omo-senpi/skills/ulw-plan/references/full-workflow.md": {
+			"lines": 279
+		},
+		"packages/omo-senpi/skills/ulw-plan/references/intent-clear.md": {
+			"lines": 44
+		},
+		"packages/omo-senpi/skills/ulw-plan/references/intent-unclear.md": {
+			"lines": 44
+		},
+		"packages/omo-senpi/skills/ulw-plan/references/stance-calibration.md": {
+			"lines": 95
+		},
+		"packages/omo-senpi/skills/ulw-plan/scripts/plan-templates.mjs": {
+			"lines": 171
+		},
+		"packages/omo-senpi/skills/ulw-plan/scripts/scaffold-plan.mjs": {
+			"lines": 190
+		},
+		"packages/omo-senpi/src/components/claim-receipt/index.ts": {
+			"lines": 191
+		},
+		"packages/omo-senpi/src/components/claim-receipt/runtime-loader.ts": {
+			"lines": 34
+		},
+		"packages/omo-senpi/src/components/claim-receipt/verdict.ts": {
+			"lines": 55
+		},
+		"packages/omo-senpi/src/components/memory/": {
+			"dir": true
+		},
+		"packages/omo-senpi/src/components/memory/kibitzer/delivery.ts": {
+			"lines": 273
+		},
+		"packages/omo-senpi/src/components/memory/kibitzer/hooks.ts": {
+			"lines": 133
+		},
+		"packages/omo-senpi/src/components/memory/kibitzer/index.ts": {
+			"lines": 323
+		},
+		"packages/omo-senpi/src/components/memory/kibitzer/sidecar.ts": {
+			"lines": 165
+		},
+		"packages/omo-senpi/src/components/memory/kibitzer/tools/index.ts": {
+			"lines": 93
+		},
+		"packages/omo-senpi/src/components/memory/recall-drain.ts": {
+			"lines": 202
+		},
+		"packages/omo-senpi/src/components/memory/recall-wiring.ts": {
+			"lines": 280
+		},
+		"packages/omo-senpi/src/components/memory/trigger-wiring.ts": {
+			"lines": 211
+		},
+		"packages/omo-senpi/src/components/task/index.ts": {
+			"lines": 431
+		},
+		"packages/omo-senpi/src/components/task/skill-invocation-tracker.ts": {
+			"lines": 413
+		},
+		"packages/omo-senpi/src/components/ulw-execute-continuation/agent-end-eligibility.ts": {
+			"lines": 104
+		},
+		"packages/omo-senpi/src/components/ulw-execute-continuation/boulder-eligibility.ts": {
+			"lines": 42
+		},
+		"packages/omo-senpi/src/components/ulw-execute-continuation/index.ts": {
+			"lines": 266
+		},
+		"packages/senpi-task/src/agents/builtin/explore.ts": {
+			"lines": 100
+		},
+		"packages/senpi-task/src/agents/builtin/gate-reviewer.ts": {
+			"lines": 42
+		},
+		"packages/senpi-task/src/agents/builtin/librarian.ts": {
+			"lines": 87
+		},
+		"packages/senpi-task/src/agents/builtin/plan-consultant.ts": {
+			"lines": 285
+		},
+		"packages/senpi-task/src/agents/builtin/plan-reviewer.ts": {
+			"lines": 212
+		},
+		"packages/senpi-task/src/agents/interaction-policy.ts": {
+			"lines": 42
+		},
+		"packages/senpi-task/src/agents/invocation-guard.ts": {
+			"lines": 100
+		},
+		"packages/senpi-task/src/tools/task/invocation-gate.ts": {
+			"lines": 15
+		},
+		"packages/senpi-task/src/tools/task/plan-review-contract.ts": {
+			"lines": 102
+		},
+		"packages/senpi-task/src/tools/task/spawn-policy.ts": {
+			"lines": 25
+		},
+		"packages/shared-skills/skills/ast-grep/SKILL.md": {
+			"lines": 286
+		},
+		"packages/shared-skills/skills/browser/SKILL.md": {
+			"lines": 148
+		},
+		"packages/shared-skills/skills/git-master/SKILL.md": {
+			"lines": 114
+		},
+		"packages/shared-skills/skills/programming/SKILL.md": {
+			"lines": 337
+		},
+		"packages/shared-skills/skills/remove-ai-slops/SKILL.md": {
+			"lines": 349
+		},
+		"packages/shared-skills/skills/review-work/SKILL.md": {
+			"lines": 286
+		},
+		"packages/shared-skills/skills/ulw-execute/SKILL.md": {
+			"lines": 249
+		},
+		"packages/shared-skills/skills/ulw-plan/SKILL.md": {
+			"lines": 98
+		},
+		"packages/shared-skills/skills/ulw-plan/references/full-workflow.md": {
+			"lines": 256
+		},
+		"script/qa/web-terminal-visual-qa.mjs": {
+			"lines": 242
+		}
+	},
 	"pstack": {
 		"agents/comment-sicko.md": {
 			"lines": 32
@@ -128,6 +850,116 @@
 		},
 		"skills/why/SKILL.md": {
 			"lines": 9
+		}
+	},
+	"superpowers": {
+		"hooks/hooks.json": {
+			"lines": 18
+		},
+		"hooks/run-hook.cmd": {
+			"lines": 79
+		},
+		"hooks/session-start": {
+			"lines": 90
+		},
+		"skills/brainstorming/SKILL.md": {
+			"lines": 316
+		},
+		"skills/brainstorming/builder-check-prompt.md": {
+			"lines": 23
+		},
+		"skills/brainstorming/scripts/server.cjs": {
+			"lines": 723
+		},
+		"skills/brainstorming/scripts/start-server.sh": {
+			"lines": 216
+		},
+		"skills/brainstorming/scripts/stop-server.sh": {
+			"lines": 120
+		},
+		"skills/brainstorming/visual-companion.md": {
+			"lines": 299
+		},
+		"skills/executing-plans/SKILL.md": {
+			"lines": 323
+		},
+		"skills/executing-plans/scripts/task-done": {
+			"lines": 55
+		},
+		"skills/executing-plans/scripts/task-start": {
+			"lines": 32
+		},
+		"skills/finishing-a-development-branch/SKILL.md": {
+			"lines": 225
+		},
+		"skills/requesting-code-review/code-reviewer.md": {
+			"lines": 198
+		},
+		"skills/subagent-driven-development/SKILL.md": {
+			"lines": 339
+		},
+		"skills/subagent-driven-development/implementer-prompt.md": {
+			"lines": 154
+		},
+		"skills/subagent-driven-development/re-review-prompt.md": {
+			"lines": 116
+		},
+		"skills/subagent-driven-development/references/batching.md": {
+			"lines": 11
+		},
+		"skills/subagent-driven-development/references/cannot-verify.md": {
+			"lines": 10
+		},
+		"skills/subagent-driven-development/references/final-review.md": {
+			"lines": 49
+		},
+		"skills/subagent-driven-development/references/fix-loop.md": {
+			"lines": 77
+		},
+		"skills/subagent-driven-development/references/handling-reports.md": {
+			"lines": 15
+		},
+		"skills/subagent-driven-development/references/preflight.md": {
+			"lines": 26
+		},
+		"skills/subagent-driven-development/references/resuming.md": {
+			"lines": 12
+		},
+		"skills/subagent-driven-development/scripts/review-package": {
+			"lines": 64
+		},
+		"skills/subagent-driven-development/scripts/sdd-repo": {
+			"lines": 54
+		},
+		"skills/subagent-driven-development/scripts/sdd-workspace": {
+			"lines": 110
+		},
+		"skills/subagent-driven-development/scripts/task-brief": {
+			"lines": 108
+		},
+		"skills/subagent-driven-development/task-reviewer-prompt.md": {
+			"lines": 209
+		},
+		"skills/systematic-debugging/SKILL.md": {
+			"lines": 283
+		},
+		"skills/test-driven-development/SKILL.md": {
+			"lines": 330
+		},
+		"skills/test-driven-development/writing-good-tests.md": {
+			"lines": 198
+		},
+		"skills/using-git-worktrees/SKILL.md": {
+			"lines": 167
+		},
+		"skills/using-superpowers/SKILL.md": {
+			"lines": 65
+		},
+		"skills/verification-before-completion/SKILL.md": {
+			"lines": 120
+		},
+		"skills/writing-plans/SKILL.md": {
+			"lines": 204
 		}
 	}
 }

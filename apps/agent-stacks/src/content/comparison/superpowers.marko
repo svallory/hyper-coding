@@ -1,0 +1,518 @@
+import { superpowers } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="superpowers" name="Superpowers"
+  by="Jesse Vincent · Claude Code, about 15 other harnesses" source=superpowers>
+  <@summary>
+    15 skills, no commands. A <script-ref of=superpowers name="session-start" path="hooks/session-start"/> hook injects a rule that skill use is mandatory. The human gates the design, the plan and the merge; in between the agent runs without pausing and records each decision it made alone.
+  </@summary>
+  <@order label="Order, per the author" lead="recommended in docs and skill hand-offs; nothing checks the order">
+    README, "The Basic Workflow": <skill-ref of=superpowers name="brainstorming" path="skills/brainstorming/SKILL.md"/>, <skill-ref of=superpowers name="using-git-worktrees" path="skills/using-git-worktrees/SKILL.md"/>, <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md"/>, <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md"/> or <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md"/>, <skill-ref of=superpowers name="test-driven-development" path="skills/test-driven-development/SKILL.md"/>, requesting-code-review, <skill-ref of=superpowers name="finishing-a-development-branch" path="skills/finishing-a-development-branch/SKILL.md"/>. Each skill names the next one in its own text. The skills differ from the README: the worktree is created after the plan, per-task review uses its own prompt, and whole-branch review is not in the README list.
+  </@order>
+  <@owner from="brainstorming" to="design-approval" name="brainstorming" note="skill"/>
+  <@owner from="writing-plans" to="writing-plans" name="writing-plans" note="skill"/>
+  <@owner from="workspace-setup" to="whole-branch-review"
+    name="subagent-driven-development or executing-plans"
+    note="one of two skills; the human picks at the plan hand-off"/>
+  <@owner from="finishing-branch" to="finishing-branch" name="finishing-a-development-branch" note="skill"/>
+  <@cover col="req" level="implicit">
+    goals and non-goals in the design doc; no criteria list
+  </@cover>
+  <@cover col="base" level="implicit">
+    "Look Before You Ask" inside <skill-ref of=superpowers name="brainstorming" path="skills/brainstorming/SKILL.md"/>
+  </@cover>
+  <@cover col="design" level="explicit">design doc behind a hard human gate</@cover>
+  <@cover col="tasks" level="explicit">
+    <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md"/>
+  </@cover>
+  <@cover col="verify" level="implicit">
+    reviews and tests; no requirement-by-requirement check
+  </@cover>
+  <@cover col="learn" level="absent">ledger deleted at the end</@cover>
+  <@take>
+    On-disk ledger with a resume rule; every solo decision recorded as ruling, reason, cost if wrong.
+  </@take>
+  <@take>Bounded fix loop: 5 rounds, escalate the model, then the controller rules.</@take>
+  <@take>Briefs, reports and diffs travel as files, so the controller context stays small.</@take>
+  <@gap>No learning kept between pieces of work.</@gap>
+  <@gap>One plan, one worktree, tasks strictly in sequence.</@gap>
+  <@gap>
+    No requirement-by-requirement check at the end; the final reviewer asks only whether all planned functionality is present.
+  </@gap>
+
+  <@step id="brainstorming" title="Brainstorming" phrase="Questions, approaches, design doc" group="plan"
+    human>
+    <@what>
+      Reads the code until it can say how the relevant parts work today, asks questions, proposes approaches, writes the design.
+    </@what>
+    <@starts>
+      The <skill-ref of=superpowers name="using-superpowers" path="skills/using-superpowers/SKILL.md"/> rule sends a request to build something here. Prompt text; nothing checks it.
+      <skill-ref of=superpowers name="using-superpowers" path="skills/using-superpowers/SKILL.md" line="30"/>
+    </@starts>
+    <@via>
+      <skill-ref of=superpowers name="brainstorming" path="skills/brainstorming/SKILL.md"/> skill. A <script-ref of=superpowers name="session-start" path="hooks/session-start"/> hook injects only the <skill-ref of=superpowers name="using-superpowers" path="skills/using-superpowers/SKILL.md"/> text; "you ABSOLUTELY MUST invoke the skill" is prompt text, and the human can opt out
+    </@via>
+    <@actor>Main agent with the human</@actor>
+    <@input>Request and the repo</@input>
+    <@output>docs/superpowers/specs/&lt;date>-&lt;topic>-design.md</@output>
+    <@gate>Human picks an approach</@gate>
+    <@back>Itself for playback rounds</@back>
+
+    <@row kind="hook" name="SessionStart" path="hooks/hooks.json" gloss="startup, clear, compact">
+      <@row kind="script" name="run-hook.cmd" path="hooks/run-hook.cmd" at="9"
+        gloss="finds bash, starts the hook script">
+        <@row kind="script" name="session-start" path="hooks/session-start" at="79" word="SCRIPT_NAME"
+          gloss="prints the skill text into the session">
+          <@row kind="skill" name="using-superpowers" path="skills/using-superpowers/SKILL.md" at="25"
+            gloss="rule: invoke any skill that might apply"/>
+        </@row>
+      </@row>
+    </@row>
+    <@row own kind="skill" name="brainstorming" path="skills/brainstorming/SKILL.md"
+      gloss="questions, approaches, design playback">
+      <@row kind="reference" name="visual-companion.md" path="skills/brainstorming/visual-companion.md"
+        at="315" when="the human accepts the companion offer"
+        gloss="mockups in a browser; reads the clicks">
+        <@row kind="script" name="start-server.sh" path="skills/brainstorming/scripts/start-server.sh"
+          at="38" gloss="starts the mockup server, prints its URL">
+          <@row kind="script" name="server.cjs" path="skills/brainstorming/scripts/server.cjs"
+            at="178,187" gloss="Node server: serves screens, records clicks"/>
+        </@row>
+        <@row kind="script" name="stop-server.sh" path="skills/brainstorming/scripts/stop-server.sh"
+          at="291" gloss="stops it"/>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="design-approval" title="Design approval" phrase="Cold-read check, then hard gate"
+    group="check" human>
+    <@what>
+      A fresh subagent reads the design cold and returns one batch of questions (projects only; a small change skips this). Then the human approves.
+    </@what>
+    <@starts>
+      The skill is already loaded; this step begins once the human has picked an approach.
+    </@starts>
+    <@via>brainstorming/builder-check-prompt.md</@via>
+    <@actor>Subagent, main agent, human</@actor>
+    <@input>Design doc</@input>
+    <@output>Revised doc and a list of the calls the agent made alone</@output>
+    <@gate>
+      "Nothing gets built until your human partner approves the design doc"
+      <skill-ref of=superpowers name="brainstorming" path="skills/brainstorming/SKILL.md" line="269-283"/>
+    </@gate>
+    <@back>
+      None. The doc is updated in place; the cold-read check is "the only round of questions the check produces"
+    </@back>
+
+    <@row own kind="skill" name="brainstorming" path="skills/brainstorming/SKILL.md"
+      gloss="writes the design doc; hard gate until the human approves">
+      <@row kind="agent" name="builder-check-prompt.md"
+        path="skills/brainstorming/builder-check-prompt.md" at="250-251"
+        when="the design is sized as a project"
+        gloss="reads the design cold, lists what would block a builder"/>
+    </@row>
+  </@step>
+
+  <@step id="writing-plans" title="Writing plans" phrase="Design becomes test-first tasks" group="plan"
+    human>
+    <@what>
+      Turns the design into tasks with files, interfaces and failing-test-first steps. Lists input classes the spec implies but no task tests ("Review Focus"). The human reviews and picks subagent or inline execution.
+    </@what>
+    <@starts>
+      <skill-ref of=superpowers name="brainstorming" path="skills/brainstorming/SKILL.md"/> invokes it once the human approves the design.
+      <skill-ref of=superpowers name="brainstorming" path="skills/brainstorming/SKILL.md" line="32,282"/>
+    </@starts>
+    <@via>
+      <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md"/> skill
+    </@via>
+    <@actor>Main agent; human reviews</@actor>
+    <@input>Approved design</@input>
+    <@output>docs/superpowers/plans/&lt;date>-&lt;feature>.md</@output>
+    <@gate>
+      Agent self-review for spec coverage and type consistency; then the human reviews the plan and chooses the execution mode (see the connector to Workspace setup)
+    </@gate>
+    <@back>None described</@back>
+
+    <@row own kind="skill" name="writing-plans" path="skills/writing-plans/SKILL.md"
+      gloss="test-first tasks, self-review, then asks how to execute"/>
+  </@step>
+
+  <@step id="workspace-setup" title="Workspace setup" phrase="Worktree, ledger, conflict scan"
+    group="build">
+    <@what>
+      Creates the worktree and a progress ledger on disk; an existing ledger means resume at the first unfinished task.
+    </@what>
+    <@starts>
+      <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md"/> asks the human how to execute; the chosen skill begins with its Setup section.
+      <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md" line="192,201,204"/>
+    </@starts>
+    <@via>
+      <skill-ref of=superpowers name="using-git-worktrees" path="skills/using-git-worktrees/SKILL.md"/>, called from the Setup section of the chosen execution skill; <script-ref of=superpowers name="sdd-workspace" path="skills/subagent-driven-development/scripts/sdd-workspace"/> script
+    </@via>
+    <@actor>Main agent</@actor>
+    <@input>Plan and design</@input>
+    <@output>Worktree; .superpowers/sdd/&lt;plan>/progress.md</@output>
+    <@gate>
+      A red baseline is reported and the human decides: "Report failures, ask whether to proceed or investigate". Nothing built on main without consent
+    </@gate>
+
+    <@row choice="chosen at the plan hand-off">
+      <@row own kind="skill" name="subagent-driven-development"
+        path="skills/subagent-driven-development/SKILL.md" gloss="Setup section">
+        <@row kind="skill" name="using-git-worktrees" path="skills/using-git-worktrees/SKILL.md"
+          at="104" gloss="isolated worktree, baseline tests"/>
+        <@row kind="script" name="sdd-workspace"
+          path="skills/subagent-driven-development/scripts/sdd-workspace" at="114"
+          gloss="creates the plan's workspace directory">
+          <@row kind="script" name="sdd-repo" path="skills/subagent-driven-development/scripts/sdd-repo"
+            at="63" gloss="prints the repository root"/>
+        </@row>
+        <@row kind="reference" name="resuming.md"
+          path="skills/subagent-driven-development/references/resuming.md" at="120"
+          when="a ledger already exists" gloss="continue from the ledger"/>
+        <@row kind="reference" name="preflight.md"
+          path="skills/subagent-driven-development/references/preflight.md" at="136"
+          when="before dispatching task 1" gloss="conflict scan, written to the ledger"/>
+      </@row>
+      <@row own kind="skill" name="executing-plans" path="skills/executing-plans/SKILL.md"
+        gloss="Setup section; pre-flight scan from its own text">
+        <@row kind="skill" name="using-git-worktrees" path="skills/using-git-worktrees/SKILL.md"
+          at="111" gloss="isolated worktree, baseline tests"/>
+        <@row kind="script" name="sdd-workspace"
+          path="skills/subagent-driven-development/scripts/sdd-workspace" at="126"
+          gloss="the other skill's script"/>
+        <@row kind="skill" name="test-driven-development" path="skills/test-driven-development/SKILL.md"
+          at="150" gloss="no production code without a failing test"/>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="implement-task" title="Implement task" phrase="Fresh implementer, test first" group="build">
+    <@what>
+      One task at a time, in order. Subagent mode: a fresh implementer per task, briefed by file. Inline mode: the main agent does it and a script records the task only when tests pass.
+    </@what>
+    <@starts>Runs once per task of the plan.</@starts>
+    <@via>
+      <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md"/> or <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md"/>; only inline mode loads <skill-ref of=superpowers name="test-driven-development" path="skills/test-driven-development/SKILL.md"/> explicitly
+    </@via>
+    <@actor>Implementer subagent (model by task complexity) or main agent</@actor>
+    <@input>Task brief file and base commit</@input>
+    <@output>Commits; task-N-report.md; ledger line</@output>
+    <@gate>
+      Subagent mode: the task review. Inline: the <script-ref of=superpowers name="task-done" path="skills/executing-plans/scripts/task-done"/> script refuses to record a task whose test command exits non-zero, the only coded gate in this lane
+    </@gate>
+    <@back>Itself when blocked or an expected result does not match</@back>
+
+    <@row choice="chosen at the plan hand-off">
+      <@row own kind="skill" name="subagent-driven-development"
+        path="skills/subagent-driven-development/SKILL.md"
+        gloss="controller: briefs and dispatches, writes no code">
+        <@row kind="reference" name="batching.md"
+          path="skills/subagent-driven-development/references/batching.md" at="180"
+          when="the plan lists such tasks" gloss="several small same-kind edits to one subagent"/>
+        <@row kind="script" name="task-brief"
+          path="skills/subagent-driven-development/scripts/task-brief" at="204"
+          gloss="copies one task's text into a brief file"/>
+        <@row kind="agent" name="implementer-prompt.md"
+          path="skills/subagent-driven-development/implementer-prompt.md" at="237"
+          gloss="one per task: implement, test, commit, report"/>
+        <@row kind="reference" name="handling-reports.md"
+          path="skills/subagent-driven-development/references/handling-reports.md" at="246"
+          when="the report is not a plain DONE" gloss="DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED"/>
+      </@row>
+      <@row own kind="skill" name="executing-plans" path="skills/executing-plans/SKILL.md"
+        gloss="the main agent works each task itself">
+        <@row kind="script" name="task-start" path="skills/executing-plans/scripts/task-start" at="173"
+          gloss="writes the brief, prints the base commit">
+          <@row kind="script" name="task-brief"
+            path="skills/subagent-driven-development/scripts/task-brief" at="26"
+            gloss="the other skill's script"/>
+        </@row>
+        <@row kind="skill" name="test-driven-development" path="skills/test-driven-development/SKILL.md"
+          at="150,188" gloss="governs every step of the task">
+          <@row kind="reference" name="writing-good-tests.md"
+            path="skills/test-driven-development/writing-good-tests.md" at="216"
+            when="writing or changing tests" gloss="rules for honest tests"/>
+        </@row>
+        <@row kind="skill" name="systematic-debugging" path="skills/systematic-debugging/SKILL.md"
+          at="197" when="output differs from the plan and the code is wrong"/>
+        <@row kind="skill" name="verification-before-completion"
+          path="skills/verification-before-completion/SKILL.md" at="221"
+          gloss="evidence before any claim of done"/>
+        <@row kind="script" name="task-done" path="skills/executing-plans/scripts/task-done" at="226"
+          gloss="runs the task's test; logs completion only on exit 0"/>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="task-review" title="Task review" phrase="Spec and quality, five fix rounds" group="check">
+    <@what>
+      A reviewer checks the task against its brief and for quality. Up to 5 fix rounds: the first 3 resume the implementer, then a fresh one a tier up, then the controller rules and parks what is left.
+    </@what>
+    <@starts>
+      The implementer reports DONE. Only <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md"/> has this step; <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md"/> goes from its last task to the whole-branch review.
+      <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md" line="243"/>
+    </@starts>
+    <@via>
+      <agent-ref of=superpowers name="task-reviewer-prompt.md" path="skills/subagent-driven-development/task-reviewer-prompt.md"/>, references/fix-loop.md
+    </@via>
+    <@actor>Reviewer subagent; controller adjudicates</@actor>
+    <@input>Brief, report, diff</@input>
+    <@output>Review report; ledger lines for fix rounds and parked findings</@output>
+    <@gate>Spec-compliant and quality approved, or parked with a recorded ruling</@gate>
+    <@back>Implement for each fix round, then the next task</@back>
+
+    <@row own kind="skill" name="subagent-driven-development"
+      path="skills/subagent-driven-development/SKILL.md">
+      <@row kind="script" name="review-package"
+        path="skills/subagent-driven-development/scripts/review-package" at="243,262"
+        gloss="writes the task's commits and diff to a file"/>
+      <@row kind="agent" name="task-reviewer-prompt.md"
+        path="skills/subagent-driven-development/task-reviewer-prompt.md" at="295"
+        gloss="read-only: a spec verdict and a quality verdict"/>
+      <@row kind="reference" name="cannot-verify.md"
+        path="skills/subagent-driven-development/references/cannot-verify.md" at="292"
+        when="the reviewer cannot verify an item from the diff"
+        gloss="the controller settles those items itself"/>
+      <@row kind="reference" name="fix-loop.md"
+        path="skills/subagent-driven-development/references/fix-loop.md" at="302"
+        when="a verdict is not a pass" gloss="five rounds at most; reread before each">
+        <@row kind="agent" name="re-review-prompt.md"
+          path="skills/subagent-driven-development/re-review-prompt.md" at="46"
+          when="after each fix round" gloss="scoped re-review of the fix"/>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="whole-branch-review" title="Whole-branch review" phrase="One top-model review, one fix wave"
+    group="check">
+    <@what>
+      The most capable model reviews the whole branch against plan and design. One fix wave, one scoped re-review. "There is no second fix wave."
+    </@what>
+    <@starts>
+      No tasks remain.
+      <skill-ref of=superpowers name="subagent-driven-development" path="skills/subagent-driven-development/SKILL.md" line="95,324"/>
+      <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md" line="238"/>
+    </@starts>
+    <@via>requesting-code-review/code-reviewer.md, references/final-review.md</@via>
+    <@actor>
+      Reviewer subagent; one fix subagent (subagent mode) or the main agent with no re-review (inline mode)
+    </@actor>
+    <@input>Diff, plan, ledger; inline mode also passes the design and Review Focus</@input>
+    <@output>Review report; fix commits; lists of rulings and deferred minors</@output>
+    <@gate>Clean after one fix wave; the rest goes to the human</@gate>
+
+    <@row choice="chosen at the plan hand-off">
+      <@row own kind="skill" name="subagent-driven-development"
+        path="skills/subagent-driven-development/SKILL.md">
+        <@row kind="reference" name="final-review.md"
+          path="skills/subagent-driven-development/references/final-review.md" at="324"
+          gloss="whole-branch review, one fix wave, one re-review">
+          <@row kind="script" name="review-package"
+            path="skills/subagent-driven-development/scripts/review-package" at="7"
+            gloss="the whole branch this time"/>
+          <@row kind="agent" name="code-reviewer.md"
+            path="skills/requesting-code-review/code-reviewer.md" at="12-14"
+            gloss="most capable model; another skill's template"/>
+          <@row kind="agent" name="re-review-prompt.md"
+            path="skills/subagent-driven-development/re-review-prompt.md" at="23-25"
+            when="after the single fix wave" gloss="scoped re-review of the fix"/>
+        </@row>
+      </@row>
+      <@row own kind="skill" name="executing-plans" path="skills/executing-plans/SKILL.md"
+        gloss="one fix pass by the main agent, no re-review">
+        <@row kind="script" name="review-package"
+          path="skills/subagent-driven-development/scripts/review-package" at="238"
+          gloss="the other skill's script"/>
+        <@row kind="agent" name="code-reviewer.md" path="skills/requesting-code-review/code-reviewer.md"
+          at="245,255" gloss="same template; with no subagent tool the main agent reviews"/>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="finishing-branch" title="Finishing branch" phrase="Verify, then human picks integration"
+    group="ship" human>
+    <@what>
+      Runs the full suite, then offers merge, PR or keep; discard only if the human asks and types the word. The final message lists every ruling the agent made alone.
+    </@what>
+    <@starts>
+      Both execution skills end by naming it.
+      <file-ref of=superpowers name="final-review.md" path="skills/subagent-driven-development/references/final-review.md" line="49"/>
+      <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md" line="306"/>
+    </@starts>
+    <@via>
+      <skill-ref of=superpowers name="finishing-a-development-branch" path="skills/finishing-a-development-branch/SKILL.md"/> (it does not invoke <skill-ref of=superpowers name="verification-before-completion" path="skills/verification-before-completion/SKILL.md"/>)
+    </@via>
+    <@actor>Main agent, human</@actor>
+    <@input>Completed branch</@input>
+    <@output>Merged branch, PR, or kept branch</@output>
+    <@gate>Full suite green; the human chooses</@gate>
+    <@back>Stops and reports if the suite fails; the author names no fix route</@back>
+
+    <@row own kind="skill" name="finishing-a-development-branch"
+      path="skills/finishing-a-development-branch/SKILL.md"
+      gloss="full tests, three ways to integrate, removes the worktree"/>
+  </@step>
+
+  <@connector from="brainstorming" to="design-approval" enforced="prompt">
+    <@when>
+      The human has picked an approach in the 'Lay out the approaches' message and the agent has written the design doc (short for a small change, full for a project; project docs first pass the builder check).
+    </@when>
+    <@by>human</@by>
+    <@how>
+      Agent asks 'which way they want to go' after recommending one; human answers in conversation. Agent then sizes the work ('say how big the work is in plain words. They can override it') and writes the doc. Exception: if one sensible way exists the design is proposed in the first message.
+    </@how>
+    <@bound>
+      none stated (playback rounds alternate with questions through the whole conversation; no cap)
+    </@bound>
+    <@source>
+      <cited-quote of=superpowers path="skills/brainstorming/SKILL.md" line="162-164">Recommend one and say why, then ask which way they want to go</cited-quote>
+    </@source>
+  </@connector>
+
+  <@connector from="design-approval" to="writing-plans" enforced="prompt">
+    <@when>
+      The human approves the design doc (short one for a small change, full one for a project); until then nothing may be built.
+    </@when>
+    <@by>human</@by>
+    <@how>
+      For a project the agent dispatches a fresh subagent with <agent-ref of=superpowers name="builder-check-prompt.md" path="skills/brainstorming/builder-check-prompt.md"/>, sorts its questions into answered / minor / theirs, asks the 'theirs' pile in one message, updates the doc, then hands it over with a list of its own calls. The human then approves. The agent then invokes superpowers:writing-plans 'and no other skill'.
+    </@how>
+    <@bound>
+      Builder check: one round of questions only ('That's the only round of questions the check produces'); no limit stated on approval rounds
+    </@bound>
+    <@source>
+      <cited-quote of=superpowers path="skills/brainstorming/SKILL.md" line="269-270">Nothing gets built until your human partner approves the design doc</cited-quote>; <cited-quote of=superpowers path="skills/brainstorming/SKILL.md" line="281-283">After the design doc is approved, the next step is the plan: invoke superpowers:writing-plans and no other…</cited-quote>
+    </@source>
+  </@connector>
+
+  <@connector from="writing-plans" to="workspace-setup" pick enforced="prompt">
+    <@when>
+      The plan is saved and self-reviewed, the human has reviewed it and has chosen how to execute it. The chosen execution skill then calls <skill-ref of=superpowers name="using-git-worktrees" path="skills/using-git-worktrees/SKILL.md"/> from its Setup section.
+    </@when>
+    <@by>human</@by>
+    <@how>
+      This is where the execution mode is chosen. The agent asks: "Which execution approach would you prefer?" with two options. Subagent-driven: "Most thorough; costs a fresh context per task and per review." Native: "Cheapest and fastest; no independent review until the end." There is no default: the agent must add "For this plan I recommend &lt;one of the two>, because &lt;one sentence>". No fallback is stated for no answer; the skill says to wait.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md" line="179-204"/>
+    </@source>
+  </@connector>
+
+  <@connector from="workspace-setup" to="implement-task" enforced="prompt">
+    <@when>
+      An isolated workspace exists (or the human declined one), project setup ran, baseline tests passed or the human said to proceed, the ledger exists, the plan and spec were read and the preflight scan ruled.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      Model follows the skill. The only human decisions: consent to create a worktree if no preference is declared, and whether to proceed when baseline tests fail ('Report failures, ask whether to proceed or investigate'). Code only guards the ledger/workspace scripts (<script-ref of=superpowers name="sdd-repo" path="skills/subagent-driven-development/scripts/sdd-repo"/> exits 2 outside a git working tree or with no commit).
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <cited-quote of=superpowers path="skills/using-git-worktrees/SKILL.md" line="130">If tests fail: Report failures, ask whether to proceed or investigate.</cited-quote>; <cited-quote of=superpowers path="skills/subagent-driven-development/SKILL.md" line="105-106">Never start implementation on a main/master branch without…</cited-quote>
+    </@source>
+  </@connector>
+
+  <@connector from="implement-task" to="task-review" enforced="prompt">
+    <@when>
+      Subagent mode only. The implementer returns status DONE (other statuses go through <file-ref of=superpowers name="handling-reports.md" path="skills/subagent-driven-development/references/handling-reports.md"/> first). Controller then builds a review package from the recorded BASE and dispatches the task reviewer.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      Controller reads the implementer's under-15-line status contract, runs <script-ref of=superpowers name="review-package" path="skills/subagent-driven-development/scripts/review-package"/> PLAN BASE HEAD, passes the printed path plus brief, report file and global constraints to the reviewer.
+    </@how>
+    <@bound>
+      none stated for implementer retries on BLOCKED/NEEDS_CONTEXT; the review rounds are bounded at 5 (edge 5->4)
+    </@bound>
+    <@source>
+      <cited-quote of=superpowers path="skills/subagent-driven-development/SKILL.md" line="243">DONE: Generate the review package ... then dispatch the task reviewer with the printed path.</cited-quote>; <cited-quote of=superpowers path="skills/subagent-driven-development/SKILL.md" line="255-256">Never skip the task review</cited-quote>
+    </@source>
+  </@connector>
+
+  <@connector from="task-review" to="whole-branch-review" enforced="prompt">
+    <@when>
+      Every task has a 'Task N: complete' ledger line (review clean, or open findings parked with rulings at the round-5 cap) and no tasks remain.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      Controller appends the completion line, marks the todo, and when 'every task is complete, read references/final-review.md and follow it'.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <cited-quote of=superpowers path="skills/subagent-driven-development/SKILL.md" line="309-319">Never move to the next task while the review has open Critical/Important issues that are neither fixed nor parked-with-ruling at the cap.</cited-quote>; <cited-quote of=superpowers path="skills/subagent-driven-development/SKILL.md" line="323-324">When every task is…</cited-quote>
+    </@source>
+  </@connector>
+
+  <@connector from="whole-branch-review" to="finishing-branch" enforced="prompt">
+    <@when>
+      SDD: the final review is clean or its single fix wave and single scoped re-review are done and residual findings are parked/ruled. Inline: the one fix pass is complete and the suite is green. The Ruling and deferred-minor lines are copied into the final message, the workspace is deleted, then <skill-ref of=superpowers name="finishing-a-development-branch" path="skills/finishing-a-development-branch/SKILL.md"/> is…
+    </@when>
+    <@by>model</@by>
+    <@how>
+      Model follows <file-ref of=superpowers name="final-review.md" path="skills/subagent-driven-development/references/final-review.md"/> (or <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md"/> Final Review + Finish). Residual load-bearing findings are not looped on; they surface to the human when the finishing menu is presented.
+    </@how>
+    <@bound>One fix wave (SDD) / one fix pass (inline); 'There is no second fix wave'</@bound>
+    <@source>
+      <cited-quote of=superpowers path="skills/subagent-driven-development/references/final-review.md" line="29-31">There is no second fix wave — residual load-bearing findings surface to your human partner when finishing-a-development-branch presents the options.</cited-quote>; <cited-quote of=superpowers path="skills/subagent-driven-development/references/final-review.md" line="49">Use…</cited-quote>
+    </@source>
+  </@connector>
+
+  <@connector from="implement-task" to="whole-branch-review" label="inline mode: no task review"
+    enforced="prompt">
+    <@when>
+      The human chose Native (inline) execution at the end of Writing plans, or the harness has no subagent tool. After the last task is recorded, the main agent goes straight to the whole-branch review.
+    </@when>
+    <@by>human</@by>
+    <@how>
+      The mode is not chosen here; it was chosen on the Writing plans → Workspace setup connector. Inline mode has no implementer subagent, no per-task reviewer and no five-round fix loop: one whole-branch review at the end, one fix pass by the main agent, "Do not dispatch a re-review".
+    </@how>
+    <@bound>one review, one fix pass</@bound>
+    <@source>
+      <skill-ref of=superpowers name="writing-plans" path="skills/writing-plans/SKILL.md" line="179-204"/> · <skill-ref of=superpowers name="executing-plans" path="skills/executing-plans/SKILL.md" line="279-287"/>
+    </@source>
+  </@connector>
+
+  <@connector from="implement-task" to="implement-task" label="blocked" enforced="prompt">
+    <@when>
+      Subagent mode: the implementer returns DONE_WITH_CONCERNS, NEEDS_CONTEXT or BLOCKED. Inline mode: a step's output does not match its Expected line.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      "Never ignore an escalation or force the same model to retry without changes." Four conditions stop the run and go to the human instead: an irreversible operation, a security-sensitive action, a side effect outside the worktree, or a plan so broken every path is a guess.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <file-ref of=superpowers name="handling-reports.md" path="skills/subagent-driven-development/references/handling-reports.md" line="15"/>
+    </@source>
+  </@connector>
+
+  <@connector from="task-review" to="implement-task" label="fix (max 5), or next task" enforced="prompt">
+    <@when>
+      Reviewer reports spec failure, any Critical or Important finding, or a 'cannot verify' item the controller confirmed as a gap. Also taken (to the next task's implement) when the review is clean or parked at the cap and more tasks remain.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      Controller reads references/fix-loop.md before every round. Rounds 1-3 resume the original implementer with the findings verbatim; rounds 4-5 dispatch a fresh implementer on a more capable model. Each round ends with a scoped re-review. Minor findings and plan-mandated conflicts leave the loop. At the cap the controller adjudicates each open finding itself and parks it with a ledgered ruling. The controller never fixes itself.
+    </@how>
+    <@bound>5 fix rounds per task; adjudication only at the cap</@bound>
+    <@source>
+      <cited-quote of=superpowers path="skills/subagent-driven-development/references/fix-loop.md" line="20-21">A fix round is one fix dispatch plus one scoped re-review. Five rounds maximum per task:</cited-quote>; <cited-quote of=superpowers path="skills/subagent-driven-development/references/fix-loop.md" line="56-57">Never fix findings yourself in the controller session</cited-quote>
+    </@source>
+  </@connector>
+
+  <@connector from="whole-branch-review" to="whole-branch-review" label="one fix wave" enforced="prompt">
+    <@when>
+      The whole-branch review returns findings. SDD: dispatch ONE fix subagent with the full findings list, then exactly one scoped re-review. Inline: main agent fixes Critical/Important in one pass, no re-review.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      SDD controller dispatches the single fixer and a single re-review via <script-ref of=superpowers name="review-package" path="skills/subagent-driven-development/scripts/review-package"/> FIX_BASE HEAD and <agent-ref of=superpowers name="re-review-prompt.md" path="skills/subagent-driven-development/re-review-prompt.md"/>, adjudicates residuals as in the fix-loop breaker. Inline: findings are re-graded by effect first; minors are ledgered 'minor (deferred)', not fixed; each fix needs a test that failed first plus a green suite.
+    </@how>
+    <@bound>1 fix wave (SDD) / 1 fix pass (inline); no second wave</@bound>
+    <@source>
+      <cited-quote of=superpowers path="skills/subagent-driven-development/references/final-review.md" line="18-19">dispatch ONE fix subagent with the complete findings list — not one fixer per finding.</cited-quote>; <cited-quote of=superpowers path="skills/executing-plans/SKILL.md" line="290-291">There is no second fix pass.</cited-quote>
+    </@source>
+  </@connector>
+</lane>
