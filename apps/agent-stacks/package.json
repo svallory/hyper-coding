@@ -1,0 +1,33 @@
+{
+	"name": "agent-stacks",
+	"description": "Agent stacks compared: a static Marko Run site",
+	"version": "0.0.0",
+	"packageManager": "bun@1.3.11",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "marko-run",
+		"build": "marko-run build && bun scripts/assert-dist.ts",
+		"preview": "marko-run preview",
+		"test": "vitest run",
+		"check": "mtc"
+	},
+	"dependencies": {
+		"@fontsource-variable/archivo": "^5.2.0",
+		"@fontsource/ibm-plex-mono": "^5.2.0",
+		"@marko/compiler": "5.39.62",
+		"@marko/run": "^0.8.1",
+		"@marko/run-adapter-static": "^2.0.4",
+		"marko": "6.0.163"
+	},
+	"devDependencies": {
+		"@marko/type-check": "^2.0.0",
+		"@types/node": "^25.2.3",
+		"typescript": "^5.4.0",
+		"vite": "^7.3.1",
+		"vitest": "4.0.18"
+	},
+	"engines": {
+		"bun": ">=1.3.0"
+	}
+}

@@ -1,0 +1,107 @@
+/* Theme tokens. Light is the default; dark follows the system unless data-theme is set on the root. */
+:root {
+	--bg: #eef1f5;
+	--surface: #ffffff;
+	--sunk: #f4f6f9;
+	--fg: #151a23;
+	--muted: #4a5466;
+	--line: #cbd2dc;
+	--accent: #cf1757;
+	--link: #1b4fc4;
+	--edge: #566178;
+	--when-bg: #b84f00;
+	--when-fg: #ffffff;
+	--plan-l: #086b66;
+	--build-l: #1a58b3;
+	--check-l: #7d5400;
+	--ship-l: #6f37b8;
+	--learn-l: #266b19;
+	--tint: 9%;
+	--icon-skill: #6f37b8;
+	--icon-agent: #0b7285;
+	--icon-hook: #b45309;
+	--icon-file: #4a5466;
+	--icon-code: #1a7f37;
+	--icon-size: 18px;
+	--sans: "Archivo Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--cond: 78%;
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #10141a;
+		--surface: #192029;
+		--sunk: #141a22;
+		--fg: #eef1f6;
+		--muted: #b6bfcc;
+		--line: #3b4656;
+		--accent: #ff7aa5;
+		--link: #9cc0ff;
+		--edge: #9ba8c0;
+		--when-bg: #ff9a3d;
+		--when-fg: #1b1203;
+		--plan-l: #2cc4bc;
+		--build-l: #6aaeff;
+		--check-l: #e6b422;
+		--ship-l: #c3a2f2;
+		--learn-l: #6cc24a;
+		--tint: 15%;
+		--icon-skill: #c3a2f2;
+		--icon-agent: #4cc9d9;
+		--icon-hook: #f0a63a;
+		--icon-file: #b6bfcc;
+		--icon-code: #6cc24a;
+		color-scheme: dark;
+	}
+}
+
+:root[data-theme="dark"] {
+	--bg: #10141a;
+	--surface: #192029;
+	--sunk: #141a22;
+	--fg: #eef1f6;
+	--muted: #b6bfcc;
+	--line: #3b4656;
+	--accent: #ff7aa5;
+	--link: #9cc0ff;
+	--edge: #9ba8c0;
+	--when-bg: #ff9a3d;
+	--when-fg: #1b1203;
+	--plan-l: #2cc4bc;
+	--build-l: #6aaeff;
+	--check-l: #e6b422;
+	--ship-l: #c3a2f2;
+	--learn-l: #6cc24a;
+	--tint: 15%;
+	--icon-skill: #c3a2f2;
+	--icon-agent: #4cc9d9;
+	--icon-hook: #f0a63a;
+	--icon-file: #b6bfcc;
+	--icon-code: #6cc24a;
+	color-scheme: dark;
+}
+
+/* Step colours derive from the theme's own surface. */
+:root {
+	--plan: color-mix(in srgb, var(--plan-l) var(--tint), var(--surface));
+	--build: color-mix(in srgb, var(--build-l) var(--tint), var(--surface));
+	--check: color-mix(in srgb, var(--check-l) var(--tint), var(--surface));
+	--ship: color-mix(in srgb, var(--ship-l) var(--tint), var(--surface));
+	--learn: color-mix(in srgb, var(--learn-l) var(--tint), var(--surface));
+	--accent-soft: color-mix(in srgb, var(--accent) 10%, var(--surface));
+
+	/* One token per kind. Each points at its icon's colour; a kind can get its own colour here. */
+	--kind-skill: var(--icon-skill);
+	--kind-command: var(--icon-skill);
+	--kind-agent: var(--icon-agent);
+	--kind-hook: var(--icon-hook);
+	--kind-reference: var(--icon-file);
+	--kind-playbook: var(--icon-file);
+	--kind-rule: var(--icon-file);
+	--kind-script: var(--icon-code);
+	--kind-harness-code: var(--icon-code);
+	--kind-binary: var(--icon-code);
+	--kind-tool: var(--icon-code);
+}
