@@ -1,0 +1,35 @@
+<nav class="site-nav" aria-label="Site">
+  <a class="brand" href="/">Agent stacks</a>
+  <a href="/">Comparison</a>
+  <a href="/pstack/playbooks/">pstack playbooks</a>
+  <theme-toggle/>
+</nav>
+
+<style>
+  .site-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    min-height: 46px;
+    padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .site-nav a {
+    color: var(--fg);
+    text-decoration: none;
+  }
+  .site-nav a:hover {
+    text-decoration: underline;
+  }
+  .brand {
+    font-stretch: var(--cond);
+    font-weight: 700;
+    font-size: 1.0625rem;
+  }
+</style>

@@ -1,0 +1,29 @@
+<button/button class="theme-toggle" type="button" aria-label="Switch theme">Theme</button>
+
+<script>
+  const root = document.documentElement;
+  const isDark = () =>
+    root.dataset.theme
+      ? root.dataset.theme === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+  button().addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem("theme", next);
+    } catch {}
+  });
+</script>
+
+<style>
+  .theme-toggle {
+    margin-left: auto;
+    font: inherit;
+    color: var(--fg);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.2rem 0.7rem;
+    cursor: pointer;
+  }
+</style>
