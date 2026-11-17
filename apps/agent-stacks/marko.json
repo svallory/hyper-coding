@@ -1,3 +1,10 @@
 {
-	"tags-dir": ["./src/tags/site", "./src/tags/references", "./src/tags/ui"]
+	"tags-dir": [
+		"./src/tags/site",
+		"./src/tags/references",
+		"./src/tags/ui",
+		"./src/tags/flow",
+		"./src/tags/panel",
+		"./src/tags/tree"
+	]
 }

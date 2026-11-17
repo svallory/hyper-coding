@@ -1,0 +1,18 @@
+import { pstack } from "../../src/content/sources";
+import type { LaneViewInput } from "../../src/model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="demo" name="Demo" by="nobody" source=pstack>
+  <@step id="first" title="First step" phrase="Does the first thing" group="plan">
+    <@what>It does <skill-ref of=pstack name="alpha" path="skills/alpha/SKILL.md"/>.</@what>
+    <@handoff to="other-lane"/>
+    <@row own kind="skill" name="alpha" path="skills/alpha/SKILL.md" gloss="the first skill">
+      <@row kind="script" name="run.sh" path="skills/alpha/run.sh" at="7"
+        manual="The operator starts it by hand" gloss="runs the thing"/>
+    </@row>
+  </@step>
+  <@step id="second" title="Second step" phrase="Does the second thing" group="build"/>
+  <@connector from="first" to="second">
+    <@when>The first is done.</@when>
+  </@connector>
+</lane>

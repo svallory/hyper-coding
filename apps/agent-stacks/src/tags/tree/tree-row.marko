@@ -1,0 +1,52 @@
+import TreeRow from "./tree-row.marko";
+import { COLLAPSE_FROM_DEPTH } from "../../model/constants";
+import type { Row, Source } from "../../model/types";
+
+export interface Input {
+  row: Row;
+  of?: Source;
+}
+
+<const/row=input.row/>
+<if=row.choice !== undefined>
+  <tree-choice label=row.choice>
+    <for|alt| of=row.rows>
+      <TreeRow row=alt of=input.of/>
+    </for>
+  </tree-choice>
+</if>
+<else-if=row.rows.length>
+  <li class="tree-item">
+    <details data-row data-depth=row.depth data-kind=row.kind data-manual=!!row.manual
+      open=row.depth < COLLAPSE_FROM_DEPTH - 1>
+      <summary><tree-row-line row=row of=input.of/></summary>
+      <if=row.note><div class="row-note"><${row.note}/></div></if>
+      <if=row.warning><callout title=row.warning.title><${row.warning.content}/></callout></if>
+      <ul class="tree-children">
+        <for|child| of=row.rows>
+          <TreeRow row=child of=input.of/>
+        </for>
+      </ul>
+    </details>
+  </li>
+</else-if>
+<else>
+  <li class="tree-item">
+    <div data-row data-depth=row.depth data-kind=row.kind data-manual=!!row.manual>
+      <tree-row-line row=row of=input.of/>
+      <if=row.note><div class="row-note"><${row.note}/></div></if>
+      <if=row.warning><callout title=row.warning.title><${row.warning.content}/></callout></if>
+    </div>
+  </li>
+</else>
+
+<style>
+  .tree-item > details > summary {
+    cursor: pointer;
+  }
+  .row-note {
+    margin: 0.2rem 0 0 3.6ch;
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+</style>

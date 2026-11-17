@@ -1,0 +1,234 @@
+export interface Input {
+  /** The panels. Each is hidden until the link to it is the page's target. */
+  content?: Marko.Body;
+}
+
+<aside/root class="side-panel" aria-label="Details">
+  <div class="side-resize" role="separator" tabindex="0" aria-orientation="vertical"
+    aria-label="Resize the panel" aria-valuemin=240 aria-valuemax=720 aria-valuenow=380></div>
+  <div class="side-scroll">
+    <p class="side-empty">Pick a step or a labelled connector to see its details here.</p>
+    <${input.content}/>
+  </div>
+</aside>
+
+<script>
+  const KEYS = { tab: "panel-tab", size: "aside-size" };
+  const read = (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  const write = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  };
+
+  const panelFor = (href: string | null): HTMLElement | null => {
+    if (!href || href[0] !== "#") return null;
+    const el = document.getElementById(decodeURIComponent(href.slice(1)));
+    return el && el.classList.contains("panel") && root().contains(el) ? el : null;
+  };
+  const current = (): HTMLElement | null => panelFor(location.hash);
+
+  // Selection is the :target rule in CSS; this adds what CSS cannot.
+  const sync = () => {
+    const target = current();
+    const selected = target ? `#${target.id}` : "";
+    for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>("a[data-step], a[data-connector]"))) {
+      if (selected && decodeURIComponent(a.getAttribute("href") ?? "") === selected) {
+        a.setAttribute("aria-current", "true");
+        a.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } else a.removeAttribute("aria-current");
+    }
+    const tab = read(KEYS.tab);
+    const radio = tab && target?.querySelector<HTMLInputElement>(`input[data-tab="${tab}"]`);
+    if (radio) radio.checked = true;
+  };
+  sync();
+  addEventListener("hashchange", sync, { signal: $signal });
+  root().addEventListener("change", (e) => {
+    const t = e.target as HTMLInputElement;
+    if (t.matches?.("input[data-tab]") && t.checked) write(KEYS.tab, t.dataset.tab as string);
+  }, { signal: $signal });
+
+  // Hovering a link to a panel peeks at it; a click pins it (the link sets the target).
+  let peeked: HTMLElement | null = null;
+  const unpeek = () => {
+    peeked?.removeAttribute("data-peeked");
+    peeked = null;
+    root().removeAttribute("data-peek");
+  };
+  const peek = (e: Event) => {
+    if ((e as PointerEvent).pointerType && (e as PointerEvent).pointerType !== "mouse") return;
+    const link = (e.target as Element).closest?.("a[data-step], a[data-connector]");
+    const panel = panelFor(link?.getAttribute("href") ?? null);
+    unpeek();
+    if (!panel) return;
+    panel.setAttribute("data-peeked", "");
+    root().setAttribute("data-peek", "");
+    peeked = panel;
+  };
+  const unpeekOut = (e: Event) => {
+    if ((e.target as Element).closest?.("a[data-step], a[data-connector]")) unpeek();
+  };
+  document.addEventListener("pointerover", peek, { signal: $signal });
+  document.addEventListener("pointerout", unpeekOut, { signal: $signal });
+  document.addEventListener("focusin", peek, { signal: $signal });
+  document.addEventListener("focusout", unpeekOut, { signal: $signal });
+
+  // Esc follows the open panel's own Close link.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    unpeek();
+    const close = current()?.querySelector<HTMLAnchorElement>("a.panel-close");
+    if (close) location.hash = close.getAttribute("href") as string;
+  }, { signal: $signal });
+
+  // Resize: the left edge of the column, or the top edge of the sheet under 820 px.
+  const handle = root().querySelector<HTMLElement>(".side-resize") as HTMLElement;
+  const sheet = matchMedia("(max-width: 819.98px)");
+  const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+  const apply = (size: number) => {
+    const limits = sheet.matches ? [160, innerHeight * 0.85] : [240, Math.min(720, innerWidth * 0.7)];
+    const px = clamp(Math.round(size), limits[0], limits[1]);
+    root().style.setProperty(sheet.matches ? "--sheet-h" : "--aside-w", `${px}px`);
+    if (!sheet.matches) document.documentElement.style.setProperty("--aside-w", `${px}px`);
+    handle.setAttribute("aria-orientation", sheet.matches ? "horizontal" : "vertical");
+    handle.setAttribute("aria-valuenow", String(px));
+    return px;
+  };
+  const stored = (): { w?: number; h?: number } => {
+    try {
+      return JSON.parse(read(KEYS.size) ?? "{}");
+    } catch {
+      return {};
+    }
+  };
+  const save = (px: number) => write(KEYS.size, JSON.stringify({ ...stored(), [sheet.matches ? "h" : "w"]: px }));
+  const initial = () => {
+    const s = stored();
+    const saved = sheet.matches ? s.h : s.w;
+    if (saved) apply(saved);
+  };
+  initial();
+  sheet.addEventListener("change", initial, { signal: $signal });
+  handle.addEventListener("pointerdown", (e) => {
+    handle.setPointerCapture(e.pointerId);
+    let last = Number(handle.getAttribute("aria-valuenow"));
+    const move = (m: PointerEvent) => {
+      last = apply(sheet.matches ? innerHeight - m.clientY : innerWidth - m.clientX);
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      save(last);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  }, { signal: $signal });
+  handle.addEventListener("keydown", (e) => {
+    const grow = sheet.matches ? "ArrowUp" : "ArrowLeft";
+    const shrink = sheet.matches ? "ArrowDown" : "ArrowRight";
+    if (e.key !== grow && e.key !== shrink) return;
+    e.preventDefault();
+    const now = Number(handle.getAttribute("aria-valuenow"));
+    save(apply(now + (e.key === grow ? 24 : -24)));
+  }, { signal: $signal });
+</script>
+
+<style>
+  :root {
+    --aside-w: 380px;
+    --sheet-h: 45vh;
+    --nav-h: 47px;
+  }
+  .side-panel {
+    position: fixed;
+    z-index: 15;
+    top: var(--nav-h);
+    right: 0;
+    bottom: 0;
+    width: var(--aside-w);
+    background: var(--surface);
+    border-left: 2px solid var(--fg);
+  }
+  .side-scroll {
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem 1.125rem 2rem;
+    font-size: 0.875rem;
+  }
+  .side-resize {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    bottom: 0;
+    left: -6px;
+    width: 11px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .side-resize:hover,
+  .side-resize:focus-visible {
+    background: var(--accent);
+    opacity: 0.6;
+    outline: none;
+  }
+  .side-empty {
+    color: var(--muted);
+  }
+  /* Only the selected panel shows; hovering a link peeks at its panel instead. */
+  .side-panel:has(.panel:target) .side-empty,
+  .side-panel[data-peek] .side-empty {
+    display: none;
+  }
+  .side-panel[data-peek] .panel {
+    display: none;
+  }
+  .side-panel[data-peek] .panel[data-peeked] {
+    display: block;
+  }
+  @media (min-width: 820px) {
+    main:has(.side-panel) {
+      margin-right: var(--aside-w);
+      max-width: none;
+    }
+  }
+  @media (max-width: 819.98px) {
+    .side-panel {
+      top: auto;
+      left: 0;
+      width: auto;
+      height: var(--sheet-h);
+      border-left: 0;
+      border-top: 2px solid var(--fg);
+      transform: translateY(104%);
+    }
+    .side-panel:has(.panel:target),
+    .side-panel[data-peek] {
+      transform: none;
+    }
+    main:has(.side-panel .panel:target) {
+      padding-bottom: var(--sheet-h);
+    }
+    .side-resize {
+      top: -12px;
+      bottom: auto;
+      left: 0;
+      right: 0;
+      width: auto;
+      height: 26px;
+      cursor: row-resize;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .side-panel {
+      transition: transform 0.2s ease;
+    }
+  }
+</style>

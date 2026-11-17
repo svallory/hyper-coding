@@ -1,0 +1,106 @@
+import { normalizeLane } from "../../model/normalize";
+import { validateLane } from "../../model/validate";
+import type { LaneViewInput } from "../../model/types";
+
+export type Input = LaneViewInput;
+
+<const/lane=normalizeLane(input)/>
+<const/problems=validateLane(lane)/>
+<const/view=input.view ?? "flow"/>
+<const/linkText=input.label ?? lane.name/>
+
+<if=problems.length>
+  <for|p| of=problems>
+    <pre data-content-error>${p.message}</pre>
+  </for>
+</if>
+<else-if=view === "flow">
+  <section class="lane" id=lane.id data-lane>
+    <header class="lane-head">
+      <h2 class="lane-name">${lane.name}</h2>
+      <p class="lane-by">
+        <if=lane.byContent><${lane.byContent}/></if><else>${lane.by}</else>
+        <if=lane.status> · ${lane.status}</if>
+      </p>
+      <if=lane.summary><p class="lane-summary"><${lane.summary}/></p></if>
+      <if=lane.order>
+        <p class="lane-order">
+          <strong>${lane.order.label}</strong> <em>${lane.order.lead}</em>.
+          <${lane.order.content}/>
+        </p>
+      </if>
+    </header>
+    <!-- The graph of the flow is a later unit's; until then the steps are a plain ordered list. -->
+    <ol class="lane-steps">
+      <for|step| of=lane.steps>
+        <li>
+          <a data-step=step.id data-group=step.group href=`#${lane.id}/${step.id}`>${step.title}</a>
+          <span class="step-phrase">${step.phrase}</span>
+        </li>
+      </for>
+    </ol>
+  </section>
+</else-if>
+<else-if=view === "panels">
+  <for|step| of=lane.steps>
+    <step-panel lane=lane step=step/>
+  </for>
+  <for|c| of=lane.connectors>
+    <if=Object.keys(c.details).length>
+      <connector-panel lane=lane connector=c/>
+    </if>
+  </for>
+</else-if>
+<else-if=view === "nav">
+  <a data-lane-link=lane.id href=`#${lane.id}`>${linkText}</a>
+</else-if>
+<else-if=view === "cover">
+  <tr data-lane-row=lane.id>
+    <th scope="row"><a href=`#${lane.id}`>${linkText}</a></th>
+    <for|col| of=input.cols ?? []>
+      <td data-col=col data-level=lane.cover[col]?.level ?? "absent">
+        <if=lane.cover[col]?.content><${lane.cover[col].content}/></if>
+      </td>
+    </for>
+  </tr>
+</else-if>
+<else-if=view === "takeaways">
+  <tr data-lane-row=lane.id>
+    <th scope="row"><a href=`#${lane.id}`>${linkText}</a></th>
+    <td>
+      <ul>
+        <for|t| of=lane.takes><li><${t}/></li></for>
+      </ul>
+    </td>
+    <td>
+      <ul>
+        <for|g| of=lane.gaps><li><${g}/></li></for>
+      </ul>
+    </td>
+  </tr>
+</else-if>
+
+<style>
+  .lane {
+    margin-bottom: 2.5rem;
+  }
+  .lane-name {
+    margin: 0;
+  }
+  .lane-by,
+  .step-phrase {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+  .lane-steps {
+    margin: 0.75rem 0 0;
+    padding-left: 1.5rem;
+  }
+  .lane-steps li {
+    margin: 0 0 0.35rem;
+  }
+  .lane-steps a[aria-current] {
+    color: var(--fg);
+    font-weight: 700;
+  }
+</style>

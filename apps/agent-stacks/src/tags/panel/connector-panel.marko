@@ -1,0 +1,33 @@
+import type { Connector, Lane } from "../../model/types";
+
+export interface Input {
+  lane: Lane;
+  connector: Connector;
+}
+
+static const LABELS = { when: "When", by: "By", how: "How", bound: "Bound", source: "Source" } as const;
+static const ORDER = ["when", "by", "how", "bound", "source"] as const;
+
+<const/lane=input.lane/>
+<const/c=input.connector/>
+<const/from=lane.steps[c.from]/>
+<const/to=lane.steps[c.to]/>
+<section class="panel" id=`${lane.id}/${from.id}~${to.id}` data-panel="connector"
+  aria-label=`${from.title} to ${to.title}`>
+  <header class="panel-head">
+    <a class="panel-close" href=`#${lane.id}`>Close</a>
+    <h3 class="panel-title">${from.title} → ${to.title}</h3>
+    <if=c.label><p class="panel-phrase">${c.label}</p></if>
+    <if=c.manual><chip tone="manual">manual</chip></if>
+    <if=c.inferred><chip>our inference</chip></if>
+    <if=c.outer><chip>feeds the next piece of work</chip></if>
+    <if=c.enforced><chip>enforced by ${c.enforced}</chip></if>
+  </header>
+  <dl class="panel-fields">
+    <for|name| of=ORDER>
+      <if=c.details[name]>
+        <panel-field label=LABELS[name]><${c.details[name]}/></panel-field>
+      </if>
+    </for>
+  </dl>
+</section>
