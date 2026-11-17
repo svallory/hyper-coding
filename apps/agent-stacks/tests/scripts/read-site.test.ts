@@ -8,7 +8,8 @@ const ref = (path: string, lines: string, extra = "") =>
 const HTML = `
 <section id=l data-lane>
   <a data-step=a href="#l/a">A</a>
-  <a data-connector="a~b" data-manual href="#l/a~b">c</a>
+  <a data-connector="a~b" href="#l/a~b">c</a>
+  <a data-connector="b~c" data-manual href="#l/b~c">d</a>
 </section>
 <section id="l/a" data-panel=step>
   <aside data-warning>w</aside>
@@ -18,12 +19,12 @@ const HTML = `
         <span class=row-at>
           <a data-ref=skill data-source=s data-path=p.md data-lines=3 data-slot href=x>:3</a>, <a data-ref=skill data-source=s data-path=p.md data-lines=9 data-slot href=x>:9</a>
         </span>
-        <span data-row-name><span class=kind-icon><svg></svg></span> <span class=ref-name>top</span></span>
+        <span data-row-name><a data-ref=skill data-source=s data-path=p.md data-word=Foo><span class=kind-icon><svg></svg></span> <span class=ref-name>top</span></a></span>
       </span></summary>
       <ul>
         <li class=tree-choice data-choice><ul>
           <li><div data-row data-depth=1 data-kind=file data-manual><span data-row-name>alt  one</span></div></li>
-          <li><div data-row data-depth=1 data-kind=file><span data-row-name>alt two</span></div></li>
+          <li><div data-row data-depth=1 data-kind=file><span class=row-line><span class=row-at><a data-ref=file data-source=s data-path=w.md data-lines=4 data-slot href=x>:4</a></span><span data-row-name>alt two.md</span></span></div></li>
         </ul></li>
       </ul>
     </details></li>
@@ -46,21 +47,22 @@ describe("readSite", () => {
 				{
 					id: "l",
 					steps: 2,
-					connectors: 2,
-					manualConnectors: 1,
+					connectors: 3,
+					manualConnectors: 2,
 					stepList: [
 						{
 							id: "a",
 							warnings: 1,
-							rows: ["0 top", "1 alt one", "1 alt two"],
+							rows: ["0 top", "1 alt one", "1 alt two.md"],
 							manualRows: 1,
-							citations: 2,
+							citations: 3,
 						},
 						{ id: "b", warnings: 0, rows: [], manualRows: 0, citations: 0 },
 					],
 					connectorList: [
 						{ id: "a~b", citations: 1 },
 						{ id: "b~a", citations: 0 },
+						{ id: "b~c", citations: 0 },
 					],
 				},
 			],
@@ -72,20 +74,20 @@ describe("readSourceLinks", () => {
 	const links = readSourceLinks(HTML);
 
 	it("merges a comma list of lines, slot or not, into one link", () => {
-		expect(links.map((l) => `${l.panel} ${l.path}:${l.lines}`)).toEqual([
+		expect(links.filter((l) => l.lines).map((l) => `${l.panel} ${l.path}:${l.lines}`)).toEqual([
 			"l/a p.md:3,9",
+			"l/a w.md:4",
 			"l/a q.md:5,7",
 			"l/a~b r.md:1-2",
 		]);
 	});
 
-	it("gives a slot link the word of its row's name link", () => {
-		const withWord = readSourceLinks(
-			`<div id=l data-lane><div data-row data-depth=0><span class=row-line><span><a data-ref=skill data-source=s data-path=p.md data-lines=3 data-slot>:3</a></span><span data-row-name><a data-ref=skill data-source=s data-path=p.md data-word=Foo>Foo</a></span></span></div></div>`,
-		);
-		expect(withWord.map((l) => [l.lines, l.word])).toEqual([
-			["3", "Foo"],
-			[undefined, "Foo"],
+	it("gives a slot link the word of its row's name link, else the row's name without its extension", () => {
+		expect(links.filter((l) => l.lines).map((l) => l.word)).toEqual([
+			"Foo",
+			"alt two",
+			undefined,
+			undefined,
 		]);
 	});
 });

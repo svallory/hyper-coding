@@ -100,12 +100,19 @@ export function readSourceLinks(html: string): SourceLink[] {
 		}
 		const link: SourceLink = { ...context(el), source, path };
 		if (lines !== undefined) link.lines = lines;
-		// A slot link's word is its row's: the name link in the same line carries it.
-		const word = slot
-			? el.parentNode?.parentNode?.querySelector("[data-row-name] a[data-word]")
-			: el;
-		const w = word && attr(word, "data-word");
-		if (w) link.word = w;
+		// A slot link's word is its row's: the name link in the same line carries it, else the
+		// row's name without its extension (so every row with a line is word-checked).
+		if (slot) {
+			const line = el.parentNode?.parentNode;
+			const explicit = line?.querySelector("[data-row-name] a[data-word]");
+			const w = explicit
+				? attr(explicit, "data-word")
+				: squash(line?.querySelector("[data-row-name]")?.text ?? "").replace(/\.[a-z0-9]+$/i, "");
+			if (w) link.word = w;
+		} else {
+			const w = attr(el, "data-word");
+			if (w) link.word = w;
+		}
 		links.push(link);
 		previous = { el, link };
 	}

@@ -49,6 +49,12 @@ describe("checkCitations", () => {
 		]);
 	});
 
+	it("says a directory cannot cite lines, rather than that a file is missing", () => {
+		expect(checkCitations([link("dir/", "3")], reader).problems).toEqual([
+			"l s dir/:3: a directory cannot cite lines",
+		]);
+	});
+
 	it("reports a missing directory and ends with the summary line", () => {
 		const r = checkCitations([link("nope/"), link("a.md", "9")], reader);
 		expect(r.problems).toHaveLength(2);
