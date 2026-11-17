@@ -1,0 +1,8 @@
+import { pstack } from "../../src/content/sources";
+import type { LaneViewInput } from "../../src/model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="demo" name="Demo" source=pstack>
+  <@by><playbook-ref of=pstack name="bug-fix.md" path="skills/poteto-mode/playbooks/bug-fix.md"/> · a playbook</@by>
+  <@step id="first" title="First step" phrase="Does the first thing" group="plan"/>
+</lane>
