@@ -8,7 +8,7 @@ export type Input = LaneViewInput;
     Formerly oh-my-opencode. A typed keyword selects the mode. Shown is the opt-in written-plan path in the native edition: <skill-ref of=omo name="ulw-plan" path="packages/omo-senpi/skills/ulw-plan/SKILL.md"/>, then <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md"/>. The OpenCode edition has the same step order with different reviewers and verifier.
   </@summary>
   <@order label="Order, per the author" lead="recommended in docs; code forces continuation, not order">
-    The default is the bare keyword: "just type: <skill-ref of=omo name="ultrawork" path="packages/omo-senpi/skills/ultrawork/SKILL.md"/> … The agent figures everything out." The path drawn here is offered as "Want more control? Run <skill-ref of=omo name="ulw-plan" path="packages/omo-senpi/skills/ulw-plan/SKILL.md"/> for interview-based planning, then <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md"/>" (docs/guide/overview.md). Code restricts when the plan-review agents can be spawned, and re-injects a continue prompt while the plan has unchecked boxes. Nothing in code checks the step order.
+    The default is the bare keyword: "just type: <skill-ref of=omo name="ultrawork" path="packages/omo-senpi/skills/ultrawork/SKILL.md"/> … The agent figures everything out." The path drawn here is offered as "Want more control? Run <skill-ref of=omo name="ulw-plan" path="packages/omo-senpi/skills/ulw-plan/SKILL.md"/> for interview-based planning, then <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md"/>" (<file-ref of=omo name="overview.md" path="docs/guide/overview.md"/>). Code restricts when the plan-review agents can be spawned, and re-injects a continue prompt while the plan has unchecked boxes. Nothing in code checks the step order.
   </@order>
   <@owner from="ground" to="review-plan" name="ulw-plan" note="skill"/>
   <@owner from="execute-plan" to="land-and-ship" name="ulw-execute" note="skill"/>
@@ -47,11 +47,11 @@ export type Input = LaneViewInput;
       <file-ref of=omo name="skill-invocation-tracker.ts" path="packages/omo-senpi/src/components/task/skill-invocation-tracker.ts" line="61-78"/>
     </@starts>
     <@via>
-      <skill-ref of=omo name="ulw-plan" path="packages/omo-senpi/skills/ulw-plan/SKILL.md"/> skill; explore and librarian agents
+      <skill-ref of=omo name="ulw-plan" path="packages/omo-senpi/skills/ulw-plan/SKILL.md"/> skill; <agent-ref of=omo name="explore" path="packages/senpi-task/src/agents/builtin/explore.ts"/> and <agent-ref of=omo name="librarian" path="packages/senpi-task/src/agents/builtin/librarian.ts"/> agents
     </@via>
     <@actor>Main agent as planner + read-only subagents</@actor>
     <@input>Request and the repo</@input>
-    <@output>.omo/drafts/&lt;slug>.md with IS and GAP rows</@output>
+    <@output><file-ref of=omo name=".omo/drafts/<slug>.md"/> with IS and GAP rows</@output>
     <@gate>
       "Explore to sufficiency, then STOP"
       <skill-ref of=omo name="ulw-plan" path="packages/omo-senpi/skills/ulw-plan/SKILL.md" line="118"/>
@@ -137,7 +137,7 @@ export type Input = LaneViewInput;
     <@actor>Planner</@actor>
     <@input>Approved draft</@input>
     <@output>
-      .omo/plans/&lt;slug>.md: Scope, Verification strategy, Todos, Final verification wave F1 to F4, Success criteria
+      <file-ref of=omo name=".omo/plans/<slug>.md"/>: Scope, Verification strategy, Todos, Final verification wave F1 to F4, Success criteria
     </@output>
     <@gate>
       Self-check: every GAP row is closed by a todo, every IS row is proven by a QA scenario
@@ -185,7 +185,7 @@ export type Input = LaneViewInput;
       <file-ref of=omo name="full-workflow.md" path="packages/omo-senpi/skills/ulw-plan/references/full-workflow.md" line="195-197"/>
     </@starts>
     <@via>
-      Native: <agent-ref of=omo name="plan-reviewer" path="packages/senpi-task/src/agents/builtin/plan-reviewer.ts"/> only; code lets it be spawned only inside <skill-ref of=omo name="ulw-plan" path="packages/omo-senpi/skills/ulw-plan/SKILL.md"/>. Shared skill (Codex and OpenCode editions): momus plus an independent Oracle, and both must approve
+      Native: <agent-ref of=omo name="plan-reviewer" path="packages/senpi-task/src/agents/builtin/plan-reviewer.ts"/> only; code lets it be spawned only inside <skill-ref of=omo name="ulw-plan" path="packages/omo-senpi/skills/ulw-plan/SKILL.md"/>. Shared skill (Codex and OpenCode editions): <agent-ref of=omo name="momus"/> plus an independent <agent-ref of=omo name="oracle"/>, and both must approve
     </@via>
     <@actor>Read-only reviewer subagents</@actor>
     <@input>Plan file</@input>
@@ -247,7 +247,7 @@ export type Input = LaneViewInput;
     </@via>
     <@actor>Main agent as orchestrator; category workers</@actor>
     <@input>Approved plan</@input>
-    <@output>.omo/boulder.json; todos; worktrees; .omo/ulw-execute/ledger.jsonl</@output>
+    <@output><file-ref of=omo name=".omo/boulder.json"/>; todos; worktrees; <file-ref of=omo name=".omo/ulw-execute/ledger.jsonl"/></@output>
     <@gate>
       Goal, todos and state file exist before the first dispatch
       <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md" line="54-58,82"/>
@@ -298,7 +298,7 @@ export type Input = LaneViewInput;
       <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md" line="191"/>
     </@starts>
     <@via>
-      <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md"/> phase 4; gate-reviewer agent
+      <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md"/> phase 4; <agent-ref of=omo name="gate-reviewer" path="packages/senpi-task/src/agents/builtin/gate-reviewer.ts"/> agent
     </@via>
     <@actor>Worker, independent reviewer, orchestrator</@actor>
     <@input>DoneClaim</@input>
@@ -356,7 +356,7 @@ export type Input = LaneViewInput;
       <hook-ref of=omo name="ulw-execute-continuation" path="packages/omo-senpi/src/components/ulw-execute-continuation/index.ts" line="222"/>
     </@starts>
     <@via>
-      Plan rows F1 to F4, run by <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md"/>; gate-reviewer agent
+      Plan rows F1 to F4, run by <skill-ref of=omo name="ulw-execute" path="packages/shared-skills/skills/ulw-execute/SKILL.md"/>; <agent-ref of=omo name="gate-reviewer" path="packages/senpi-task/src/agents/builtin/gate-reviewer.ts"/> agent
     </@via>
     <@actor>QA workers and the gate reviewer</@actor>
     <@input>Landed work, diff, evidence</@input>
@@ -510,7 +510,7 @@ export type Input = LaneViewInput;
     </@when>
     <@by>human</@by>
     <@how>
-      Plan skill never begins execution; the user starts a separate worker session. Reviewer verdict is OKAY/REJECT (senpi) or both momus and Oracle approve (shared). Question 'start now or review first' asked only for CLEAR without review_required.
+      Plan skill never begins execution; the user starts a separate worker session. Reviewer verdict is OKAY/REJECT (senpi) or both <agent-ref of=omo name="momus"/> and <agent-ref of=omo name="oracle"/> approve (shared). Question 'start now or review first' asked only for CLEAR without review_required.
     </@how>
     <@bound>see 3->2 and 3->1</@bound>
     <@source>

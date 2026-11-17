@@ -8,7 +8,7 @@ export type Input = LaneViewInput;
     Extends Compound Engineering. The plan is an epic with child issues ("beads") in the Beads tracker, not a file. A hook asks a subagent to log what it learned before it stops, but does not check that it did.
   </@summary>
   <@order label="Order, per the author" lead="recommended in docs; the human types each command">
-    "Most of the time, you type three commands": <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/>, <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/>, <command-ref of=lavra name="lavra-ship" path="plugins/lavra/commands/lavra-ship.md"/>, with <command-ref of=lavra name="lavra-qa" path="plugins/lavra/commands/lavra-qa.md"/> optional for web apps (README.md). Inside <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/> the phases chain: "Brainstorm → Plan → Research → Revise → CEO Review → Eng Review → Lock". Review and the fix loop run inside <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/>. <command-ref of=lavra name="lavra-quick"/> is a shortcut for small tasks.
+    "Most of the time, you type three commands": <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/>, <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/>, <command-ref of=lavra name="lavra-ship" path="plugins/lavra/commands/lavra-ship.md"/>, with <command-ref of=lavra name="lavra-qa" path="plugins/lavra/commands/lavra-qa.md"/> optional for web apps (<file-ref of=lavra name="README.md" path="README.md"/>). Inside <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/> the phases chain: "Brainstorm → Plan → Research → Revise → CEO Review → Eng Review → Lock". Review and the fix loop run inside <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/>. <command-ref of=lavra name="lavra-quick"/> is a shortcut for small tasks.
   </@order>
   <@owner from="brainstorm" to="review-lock" name="lavra-design" note="command; chains six phases"/>
   <@owner from="execute-beads" to="review-goal-verify" name="lavra-work"
@@ -40,7 +40,7 @@ export type Input = LaneViewInput;
   <@gap>Nothing rechecks the epic requirements after the beads pass.</@gap>
   <@gap>Ship ends at the PR.</@gap>
   <@gap>
-    Two hook scripts call code that is not there: <script-ref of=lavra name="extract-bead-context.sh" path="plugins/lavra/hooks/extract-bead-context.sh"/> looks for <script-ref of=lavra name="sanitize-content.sh" path="plugins/lavra/hooks/sanitize-content.sh"/> one directory too high and exits with an error; check-memory.sh calls a function that only the installer defines.
+    Two hook scripts call code that is not there: <script-ref of=lavra name="extract-bead-context.sh" path="plugins/lavra/hooks/extract-bead-context.sh"/> looks for <script-ref of=lavra name="sanitize-content.sh" path="plugins/lavra/hooks/sanitize-content.sh"/> one directory too high and exits with an error; <script-ref of=lavra name="check-memory.sh"/> calls a function that only the installer defines.
   </@gap>
 
   <@step id="brainstorm" title="Brainstorm" phrase="Requirements dialogue, then scope" group="plan" human>
@@ -147,7 +147,7 @@ export type Input = LaneViewInput;
       Domain research agents gather evidence; findings are written back into the beads. Skipped by default.
     </@what>
     <@starts>
-      Only if the human picks "Run research" at the plan gate and lavra.json does not switch research off; otherwise <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/> goes straight to its revise phase.
+      Only if the human picks "Run research" at the plan gate and <file-ref of=lavra name="lavra.json"/> does not switch research off; otherwise <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md"/> goes straight to its revise phase.
       <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md" line="170-176,182"/>
     </@starts>
     <@via>
@@ -207,10 +207,10 @@ export type Input = LaneViewInput;
     </@actor>
     <@input>Revised epic</@input>
     <@output>
-      Epic labelled plan-reviewed; backlog beads for deferred items; .lavra/memory/session-state.md
+      Epic labelled plan-reviewed; backlog beads for deferred items; <file-ref of=lavra name=".lavra/memory/session-state.md"/>
     </@output>
     <@gate>
-      Human answers per issue; bd swarm validate. The engineering review can be switched off in lavra.json (workflow.plan_review: false); the CEO review has no switch. Nothing later checks the plan-reviewed label
+      Human answers per issue; bd swarm validate. The engineering review can be switched off in <file-ref of=lavra name="lavra.json"/> (workflow.plan_review: false); the CEO review has no switch. Nothing later checks the plan-reviewed label
       <skill-ref of=lavra name="lavra-ceo-review" path="plugins/lavra/skills/lavra-ceo-review/SKILL.md" line="161"/>
       <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md" line="301-313,317,329-358,432-438"/>
     </@gate>
@@ -252,7 +252,7 @@ export type Input = LaneViewInput;
       <command-ref of=lavra name="lavra-design" path="plugins/lavra/commands/lavra-design.md" line="569-570"/>
     </@starts>
     <@via>
-      lavra-work, which routes to <skill-ref of=lavra name="lavra-work-single" path="plugins/lavra/skills/lavra-work-single/SKILL.md"/>, a sequential loop over it, or <skill-ref of=lavra name="lavra-work-multi" path="plugins/lavra/skills/lavra-work-multi/SKILL.md"/>
+      <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/>, which routes to <skill-ref of=lavra name="lavra-work-single" path="plugins/lavra/skills/lavra-work-single/SKILL.md"/>, a sequential loop over it, or <skill-ref of=lavra name="lavra-work-multi" path="plugins/lavra/skills/lavra-work-multi/SKILL.md"/>
     </@via>
     <@actor>Main agent, or one subagent per bead (3 at a time by default)</@actor>
     <@input>Locked beads</@input>
@@ -405,7 +405,7 @@ export type Input = LaneViewInput;
 
   <@step id="ship" title="Ship" phrase="Tests, scans, PR, close beads" group="ship">
     <@what>
-      Runs tests and scans, runs <agent-ref of=lavra name="goal-verifier" path="plugins/lavra/agents/review/goal-verifier.md"/> again per bead, opens the PR, closes the beads. Stops at the PR; merging is not covered. It refers to /lavra-compound, which has no command file.
+      Runs tests and scans, runs <agent-ref of=lavra name="goal-verifier" path="plugins/lavra/agents/review/goal-verifier.md"/> again per bead, opens the PR, closes the beads. Stops at the PR; merging is not covered. It refers to <command-ref of=lavra name="lavra-compound"/>, which has no command file.
     </@what>
     <@starts>
       The human types <command-ref of=lavra name="lavra-ship" path="plugins/lavra/commands/lavra-ship.md"/>; the sequential work summary names it as the next step.
@@ -435,10 +435,10 @@ export type Input = LaneViewInput;
   <@step id="knowledge-capture" title="Knowledge capture" phrase="Hooks log and recall typed knowledge"
     group="learn">
     <@what>
-      Hooks copy typed comments into a git-tracked memory file and recall the 10 best-matching entries at session start. The lavra-knowledge skill that describes capture is loaded by no command: its own text says /lavra-work and <skill-ref of=lavra name="lavra-review" path="plugins/lavra/skills/lavra-review/SKILL.md"/> call it, and neither does. It also disagrees with the hook it describes: the skill rotates the file at 1000 lines, <script-ref of=lavra name="memory-capture.sh" path="plugins/lavra/hooks/memory-capture.sh"/> at 5000. If the skill does run, it appends the entry itself and then adds the bead comment that makes the hook append it again; nothing removes the duplicate (read from the code, not run).
+      Hooks copy typed comments into a git-tracked memory file and recall the 10 best-matching entries at session start. The <skill-ref of=lavra name="lavra-knowledge"/> skill that describes capture is loaded by no command: its own text says <command-ref of=lavra name="lavra-work" path="plugins/lavra/commands/lavra-work.md"/> and <skill-ref of=lavra name="lavra-review" path="plugins/lavra/skills/lavra-review/SKILL.md"/> call it, and neither does. It also disagrees with the hook it describes: the skill rotates the file at 1000 lines, <script-ref of=lavra name="memory-capture.sh" path="plugins/lavra/hooks/memory-capture.sh"/> at 5000. If the skill does run, it appends the entry itself and then adds the bead comment that makes the hook append it again; nothing removes the duplicate (read from the code, not run).
     </@what>
     <@starts>
-      Nothing invokes it: the harness fires the four events in hooks.json during every other step. <command-ref of=lavra name="lavra-learn" path="plugins/lavra/commands/lavra-learn.md"/> and <command-ref of=lavra name="lavra-retro" path="plugins/lavra/commands/lavra-retro.md"/> are typed by the human.
+      Nothing invokes it: the harness fires the four events in <file-ref of=lavra name="hooks.json" path="plugins/lavra/hooks/hooks.json"/> during every other step. <command-ref of=lavra name="lavra-learn" path="plugins/lavra/commands/lavra-learn.md"/> and <command-ref of=lavra name="lavra-retro" path="plugins/lavra/commands/lavra-retro.md"/> are typed by the human.
       <file-ref of=lavra name="hooks.json" path="plugins/lavra/hooks/hooks.json" line="3,14,26,36"/>
     </@starts>
     <@via>
@@ -446,9 +446,9 @@ export type Input = LaneViewInput;
     </@via>
     <@actor>Hooks and agents</@actor>
     <@input>Bead comments</@input>
-    <@output>.lavra/memory/knowledge.jsonl</@output>
+    <@output><file-ref of=lavra name=".lavra/memory/knowledge.jsonl"/></@output>
     <@gate>
-      <script-ref of=lavra name="subagent-wrapup.sh" path="plugins/lavra/hooks/subagent-wrapup.sh"/> blocks a subagent from stopping whenever its transcript has a BEAD_ID line; it has no ask-once guard and never checks that a comment was logged, although docs/hooks.md says it does. <script-ref of=lavra name="teammate-idle-check.sh" path="plugins/lavra/hooks/teammate-idle-check.sh"/> blocks a teammate from stopping while bd ready lists work. These two hooks are the only code in Lavra that blocks anything
+      <script-ref of=lavra name="subagent-wrapup.sh" path="plugins/lavra/hooks/subagent-wrapup.sh"/> blocks a subagent from stopping whenever its transcript has a BEAD_ID line; it has no ask-once guard and never checks that a comment was logged, although <file-ref of=lavra name="docs/hooks.md"/> says it does. <script-ref of=lavra name="teammate-idle-check.sh" path="plugins/lavra/hooks/teammate-idle-check.sh"/> blocks a teammate from stopping while bd ready lists work. These two hooks are the only code in Lavra that blocks anything
       <script-ref of=lavra name="subagent-wrapup.sh" path="plugins/lavra/hooks/subagent-wrapup.sh" line="14-27"/>
       <script-ref of=lavra name="teammate-idle-check.sh" path="plugins/lavra/hooks/teammate-idle-check.sh" line="16-22"/>
     </@gate>
@@ -510,11 +510,11 @@ export type Input = LaneViewInput;
 
   <@connector from="plan-into-beads" to="research-revise" enforced="prompt">
     <@when>
-      Human picks Run research at the phase 2 gate; lavra.json workflow.research must not be false.
+      Human picks Run research at the phase 2 gate; <file-ref of=lavra name="lavra.json"/> workflow.research must not be false.
     </@when>
     <@by>human</@by>
     <@how>
-      AskUserQuestion; default option is labelled Skip research (default); lavra.json can disable phase 3.
+      AskUserQuestion; default option is labelled Skip research (default); <file-ref of=lavra name="lavra.json"/> can disable phase 3.
     </@how>
     <@bound>none stated</@bound>
     <@source>
