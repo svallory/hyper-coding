@@ -1,0 +1,160 @@
+import type { Kind } from "../../model/types";
+
+export interface Input {
+  label: string;
+  /** Titled groups of items. */
+  group?: Marko.AttrTag<{
+    title: string;
+    item?: Marko.AttrTag<{
+      swatch?: string;
+      icon?: string;
+      line?: string;
+      marker?: string;
+      sample?: string;
+      content?: Marko.Body;
+    }>;
+  }>;
+  /** Items outside any group. */
+  item?: Marko.AttrTag<{
+    swatch?: string;
+    icon?: string;
+    line?: string;
+    marker?: string;
+    sample?: string;
+    content?: Marko.Body;
+  }>;
+}
+
+static const ICON_KIND: Record<string, Kind> = { file: "reference", code: "script" };
+static const SWATCHES = new Set(["plan", "build", "check", "ship", "learn"]);
+
+<const/groups=[
+  ...[...(input.group ?? [])].map((g) => ({ title: g.title as string | undefined, items: [...(g.item ?? [])] })),
+  ...(input.item ? [{ title: undefined as string | undefined, items: [...input.item] }] : []),
+]/>
+
+<section class="legend-key" aria-label=input.label data-legend>
+  <for|g| of=groups>
+    <div class=(g.title ? "key-group" : "key-group key-flat") data-key-group=g.title>
+      <if=g.title><b>${g.title}</b></if>
+      <div class="key-items">
+        <for|it| of=g.items>
+          <span class="key-entry" data-key-entry>
+            <if=it.swatch && SWATCHES.has(it.swatch)>
+              <i class="key-sw" data-swatch=it.swatch
+                style=`background: var(--${it.swatch}); border-color: var(--${it.swatch}-l)`></i>
+            </if>
+            <if=it.icon === "human">
+              <i class="key-human" data-icon="human">
+                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 5.4a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M2.1 10.9c.3-2.3 1.8-3.6 3.9-3.6s3.6 1.3 3.9 3.6z"/></svg>
+              </i>
+            </if>
+            <if=it.icon === "warning"><ui-icon id="warning"/></if>
+            <if=it.icon && ICON_KIND[it.icon]><kind-icon kind=ICON_KIND[it.icon]/></if>
+            <if=it.line><i class="key-ln" data-line=it.line></i></if>
+            <if=it.line === "manual"><ui-icon id="manual"/></if>
+            <if=it.marker === "pick"><i class="key-pick" data-marker="pick"></i></if>
+            <if=it.sample><i class="key-sample">${it.sample}</i></if>
+            <span><${it.content}/></span>
+          </span>
+        </for>
+      </div>
+    </div>
+  </for>
+</section>
+
+<style>
+  .legend-key {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    gap: 1rem 2.25rem;
+    padding: 1rem 1.125rem;
+    margin: 0 0 2rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 0.8438rem;
+  }
+  .key-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+  .key-group > b {
+    font-stretch: var(--cond);
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--fg);
+  }
+  .key-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+  }
+  .key-flat {
+    grid-column: 1 / -1;
+  }
+  .key-flat .key-items {
+    gap: 8px 18px;
+    align-items: center;
+  }
+  .key-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+  }
+  .key-sw {
+    flex: none;
+    width: 15px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid;
+    border-left-width: 4px;
+  }
+  .key-human {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    color: var(--fg);
+  }
+  .key-human svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+    display: block;
+  }
+  .key-ln {
+    flex: none;
+    width: 26px;
+    height: 0;
+    border-top: 1.5px solid var(--edge);
+  }
+  .key-ln[data-line="dashed"] {
+    border-top-style: dashed;
+  }
+  .key-ln[data-line="dotted"] {
+    border-top-style: dotted;
+    border-top-width: 2px;
+  }
+  .key-pick {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+    transform: rotate(45deg);
+    margin: 0 3px;
+  }
+  .key-sample {
+    flex: none;
+    font-style: normal;
+    font-stretch: var(--cond);
+    font-weight: 700;
+    font-size: 0.8125rem;
+    color: var(--fg);
+    border-left: 1px solid var(--edge);
+    padding-left: 5px;
+    line-height: 1.1;
+  }
+</style>

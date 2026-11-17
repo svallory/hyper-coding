@@ -1,0 +1,58 @@
+.cover-table,
+.takeaways {
+	min-width: 0;
+	margin-bottom: 3.25rem;
+}
+.cover-table > h2,
+.takeaways > h2 {
+	border-top: 2px solid var(--fg);
+	padding-top: 0.875rem;
+}
+.defn {
+	color: var(--muted);
+	font-size: 0.9375rem;
+	margin: 0 0 1rem;
+}
+.table-box {
+	overflow-x: auto;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--surface);
+}
+.table-box table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.875rem;
+}
+.table-box th,
+.table-box td {
+	padding: 0.5rem 0.75rem;
+	text-align: left;
+	vertical-align: top;
+	border-bottom: 1px solid var(--line);
+}
+.table-box thead th {
+	font-stretch: 84%;
+	font-size: 0.9375rem;
+	vertical-align: bottom;
+	border-bottom: 2px solid var(--fg);
+}
+.table-box tbody th {
+	font-stretch: var(--cond);
+	font-size: 1.0625rem;
+	white-space: nowrap;
+}
+.table-box tbody th a {
+	color: var(--fg);
+	text-decoration: none;
+}
+.table-box tbody th a:hover {
+	text-decoration: underline;
+}
+.table-box ul {
+	margin: 0;
+	padding-left: 1.1rem;
+}
+.table-box li {
+	margin-bottom: 0.2rem;
+}

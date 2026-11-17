@@ -1,2 +1,47 @@
-<h1>pstack playbooks</h1>
-<p class="lede">The pstack playbooks, walked through step by step. The walkthrough arrives in a later release.</p>
+
+<page-header title="pstack Playbooks">
+  <@lede>Every playbook in poteto's pstack, one lane each, plus the entry that picks one and the fallback skill.</@lede>
+  <@how>Each playbook is one lane, read left to right. Select a step or a labelled connector and its details open in the panel on the right; the address of the page records the selection, so a link to it shares it. Choose another step to switch, or the panel's close control (or <kbd>Esc</kbd>) to clear it. A step with no icon is done from the playbook's own text.</@how>
+  <@meta>Drawn 2026-11-17 from cursor/plugins @2f87c85, pstack/skills/poteto-mode. SKILL.md, worker.md, figure-it-out and all 22 playbooks were read in full by the lead; watch-pr, worktree-audit.sh, log.sh and bootstrap.ts in full by subagents (notes/research/agent-stacks/pstack/scripts/). Nothing was run. Dotted connectors are our inference, not the playbook's words.</@meta>
+</page-header>
+
+<legend-key label="Legend">
+  <@item swatch="plan">Understand or plan</@item>
+  <@item swatch="build">Build</@item>
+  <@item swatch="check">Check</@item>
+  <@item swatch="ship">Commit, PR, merge</@item>
+  <@item swatch="learn">Record</@item>
+  <@item swatch="human">A human decides here</@item>
+  <@item line="solid">next step / loop back</@item>
+  <@item line="dashed">starts a new pass</@item>
+  <@item line="dotted">our inference, not stated in the playbook</@item>
+  <@item marker="pick">a decision on this connector; point at it</@item>
+  <@item icon="file">prompt files the model reads (skills, playbooks, references)</@item>
+  <@item icon="code">programs that run (scripts, CLIs, built-in commands)</@item>
+</legend-key>
+
+<!-- Each group takes its lanes' `view="nav"` as its body; a group with no body renders nothing. -->
+<lane-nav title="Lanes" label="Playbooks">
+  <@group title="Entry"/>
+  <@group title="Understand"/>
+  <@group title="Change code"/>
+  <@group title="Skills"/>
+  <@group title="Pull requests"/>
+  <@group title="Long runs"/>
+  <@group title="Session"/>
+</lane-nav>
+
+<!-- The lanes go here, one `view="flow"` each, in the order of the navigation groups. -->
+
+<reading-list id="reading" title="My reading">
+  <@item>A playbook is not a skill. It is a plain file of 8 to 25 lines (320 lines for all 22) with no frontmatter, inside the poteto-mode skill folder. The plugin manifest registers only skills/ and agents/, so the harness does not know playbooks exist: no description to match on, no slash command, no hook. The only way in is poteto-mode, which a human must type (disable-model-invocation: true). Its last section tells the model to open one file with an ordinary file read and copy the steps into the todo tool. Subagents never pick one: "The chat that receives /poteto-mode owns the playbook, the todo list, and every Task spawn."</@item>
+  <@item>Choosing a playbook is the model reading one sentence. poteto-mode ends with the 22 titles, comma-separated, under "Match the task to a playbook". There is no trigger table, no keyword list and no code. The fallback, figure-it-out, is also chosen by the model.</@item>
+  <@item>Three programs appear in all 22 playbooks, and none of them decides anything: watch-pr reports a PR's state through exit codes, worktree-audit.sh suggests a bucket and never deletes, log.sh appends a row. Every gate, cap and step order on this page is prompt text.</@item>
+  <@item>A human is needed in few places: typing /poteto-mode, asking for a babysit or a landing, the operator's go in Multi-phase plan and the autopilots, irreversible writes, and uncommitted work in Worktree cleanup. Everything else follows "Just do it".</@item>
+  <@item>The same three rules repeat across the code playbooks: reproduce or measure on the real surface first; "Inconclusive or wrong-surface is not a pass"; a change that did not help is reverted, not left in.</@item>
+  <@item>One contradiction: Opening a PR says it is "Invoked at the end of every other playbook". Seven playbooks say "Run Opening a PR" as their last step, the two autopilots use it inside, and the rest end with a reply, a plan, a diagnosis or a merge.</@item>
+  <@item>Worth taking for hyper: a stop predicate that pairs a target with a floor on attempts (Hillclimb); a verdict that covers a patch, checked with git patch-id, not a commit (Shipping); pin the behaviour before moving structure (Refactoring); "No decision means no prototype"; a plan whose every PR has unit, live and perf boxes with the trunk baseline measured first (Multi-phase plan).</@item>
+</reading-list>
+
+<!-- Each lane adds its `view="panels"` inside. -->
+<side-panel/>

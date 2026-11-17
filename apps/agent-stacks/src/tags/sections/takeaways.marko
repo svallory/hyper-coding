@@ -1,0 +1,27 @@
+import "./section-table.css";
+
+export interface Input {
+  id: string;
+  title: string;
+  laneHeading: string;
+  takesHeading: string;
+  gapsHeading: string;
+  /** The rows: each lane's `view="takeaways"`. */
+  content?: Marko.Body;
+}
+
+<section class="takeaways" id=input.id data-takeaways>
+  <h2>${input.title}</h2>
+  <div class="table-box">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">${input.laneHeading}</th>
+          <th scope="col">${input.takesHeading}</th>
+          <th scope="col">${input.gapsHeading}</th>
+        </tr>
+      </thead>
+      <tbody><${input.content}/></tbody>
+    </table>
+  </div>
+</section>
