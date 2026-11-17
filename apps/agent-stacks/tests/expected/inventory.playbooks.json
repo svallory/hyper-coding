@@ -1,0 +1,1908 @@
+{
+	"page": "playbooks",
+	"lanes": [
+		{
+			"id": "router",
+			"steps": 7,
+			"connectors": 7,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "poteto-mode",
+					"warnings": 0,
+					"rows": ["0 poteto-mode", "0 pstack-models.mdc"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "match-playbook",
+					"warnings": 0,
+					"rows": ["0 22 playbooks"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "figure-it-out",
+					"warnings": 0,
+					"rows": ["0 figure-it-out"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "run-playbook",
+					"warnings": 0,
+					"rows": ["0 poteto-agent", "0 worker.md", "0 pstack-models.mdc"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "opening-a-pr",
+					"warnings": 0,
+					"rows": ["0 Opening a PR"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "babysit",
+					"warnings": 0,
+					"rows": ["0 Babysit"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "shipping",
+					"warnings": 0,
+					"rows": ["0 Shipping"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "poteto-mode~match-playbook",
+					"citations": 0
+				},
+				{
+					"id": "match-playbook~figure-it-out",
+					"citations": 0
+				},
+				{
+					"id": "match-playbook~run-playbook",
+					"citations": 0
+				},
+				{
+					"id": "figure-it-out~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "run-playbook~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "opening-a-pr~babysit",
+					"citations": 0
+				},
+				{
+					"id": "babysit~shipping",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "figure-it-out",
+			"steps": 7,
+			"connectors": 8,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "frame",
+					"warnings": 0,
+					"rows": [
+						"0 figure-it-out",
+						"0 principle-prove-it-works",
+						"0 principle-never-block-on-the-human"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "design-workflow",
+					"warnings": 0,
+					"rows": [
+						"0 architect",
+						"0 arena",
+						"0 principle-foundational-thinking",
+						"0 principle-separate-before-serializing-shared-state",
+						"0 principle-laziness-protocol"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "build-harness",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "run-loop",
+					"warnings": 0,
+					"rows": ["0 principle-sequence-verifiable-units", "0 poteto-agent", "0 worker.md"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "judge-unit",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "audit-trail",
+					"warnings": 0,
+					"rows": ["0 show-me-your-work", "0 log.sh"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "verify-whole",
+					"warnings": 0,
+					"rows": ["0 principle-encode-lessons-in-structure"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "frame~design-workflow",
+					"citations": 0
+				},
+				{
+					"id": "design-workflow~build-harness",
+					"citations": 0
+				},
+				{
+					"id": "build-harness~run-loop",
+					"citations": 0
+				},
+				{
+					"id": "run-loop~judge-unit",
+					"citations": 0
+				},
+				{
+					"id": "judge-unit~audit-trail",
+					"citations": 0
+				},
+				{
+					"id": "audit-trail~verify-whole",
+					"citations": 0
+				},
+				{
+					"id": "judge-unit~run-loop",
+					"citations": 0
+				},
+				{
+					"id": "judge-unit~design-workflow",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "investigation",
+			"steps": 4,
+			"connectors": 3,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "trace-code",
+					"warnings": 0,
+					"rows": ["0 Investigation", "0 why"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "checkpoint-line",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "write-answer",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "unslop-reply",
+					"warnings": 0,
+					"rows": ["0 unslop"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "trace-code~checkpoint-line",
+					"citations": 0
+				},
+				{
+					"id": "checkpoint-line~write-answer",
+					"citations": 0
+				},
+				{
+					"id": "write-answer~unslop-reply",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "runtime-forensics",
+			"steps": 4,
+			"connectors": 3,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "capture-signal",
+					"warnings": 0,
+					"rows": ["0 Runtime forensics", "0 control-ui / control-cli"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "reduce-artifact",
+					"warnings": 0,
+					"rows": ["0 principle-guard-the-context-window", "0 poteto-agent", "0 worker.md"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "prove-mechanism",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "map-to-source",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "capture-signal~reduce-artifact",
+					"citations": 0
+				},
+				{
+					"id": "reduce-artifact~prove-mechanism",
+					"citations": 0
+				},
+				{
+					"id": "prove-mechanism~map-to-source",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "trace-forensics",
+			"steps": 6,
+			"connectors": 5,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "load-artifact",
+					"warnings": 0,
+					"rows": ["0 Trace forensics", "0 principle-guard-the-context-window", "0 poteto-agent"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "make-queryable",
+					"warnings": 0,
+					"rows": ["0 sqlite"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "narrow-cause",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "attribute-source",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "confirm-by-diff",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "hand-back",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "load-artifact~make-queryable",
+					"citations": 0
+				},
+				{
+					"id": "make-queryable~narrow-cause",
+					"citations": 0
+				},
+				{
+					"id": "narrow-cause~attribute-source",
+					"citations": 0
+				},
+				{
+					"id": "attribute-source~confirm-by-diff",
+					"citations": 0
+				},
+				{
+					"id": "confirm-by-diff~hand-back",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "bug-fix",
+			"steps": 7,
+			"connectors": 8,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "reproduce",
+					"warnings": 0,
+					"rows": ["0 Bug fix", "0 control-ui / control-cli"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "find-cause",
+					"warnings": 0,
+					"rows": ["0 why", "0 /loop", "0 poteto-agent"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "plan-fix",
+					"warnings": 0,
+					"rows": ["0 architect"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "delegate-fix",
+					"warnings": 0,
+					"rows": ["0 poteto-agent", "0 worker.md", "0 pstack-models.mdc"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "verify",
+					"warnings": 0,
+					"rows": ["0 control-ui / control-cli"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "order-commits",
+					"warnings": 0,
+					"rows": ["0 tdd", "0 principle-sequence-verifiable-units", "0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "opening-a-pr",
+					"warnings": 0,
+					"rows": ["0 Opening a PR"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "reproduce~find-cause",
+					"citations": 0
+				},
+				{
+					"id": "find-cause~plan-fix",
+					"citations": 0
+				},
+				{
+					"id": "plan-fix~delegate-fix",
+					"citations": 0
+				},
+				{
+					"id": "delegate-fix~verify",
+					"citations": 0
+				},
+				{
+					"id": "verify~order-commits",
+					"citations": 0
+				},
+				{
+					"id": "order-commits~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "find-cause~find-cause",
+					"citations": 0
+				},
+				{
+					"id": "verify~find-cause",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "feature",
+			"steps": 8,
+			"connectors": 9,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "trace-subsystem",
+					"warnings": 0,
+					"rows": ["0 Feature"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "architect",
+					"warnings": 0,
+					"rows": ["0 architect", "0 arena"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "throughput-checkpoint",
+					"warnings": 0,
+					"rows": ["0 principle-separate-before-serializing-shared-state"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "delegate-build",
+					"warnings": 0,
+					"rows": [
+						"0 poteto-agent",
+						"0 worker.md",
+						"0 pstack-models.mdc",
+						"0 arena",
+						"0 principle-model-the-domain"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "verify",
+					"warnings": 0,
+					"rows": ["0 control-ui / control-cli"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "order-commits",
+					"warnings": 0,
+					"rows": ["0 principle-sequence-verifiable-units", "0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "interrogate",
+					"warnings": 0,
+					"rows": ["0 interrogate"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "opening-a-pr",
+					"warnings": 0,
+					"rows": ["0 Opening a PR"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "trace-subsystem~architect",
+					"citations": 0
+				},
+				{
+					"id": "architect~throughput-checkpoint",
+					"citations": 0
+				},
+				{
+					"id": "throughput-checkpoint~delegate-build",
+					"citations": 0
+				},
+				{
+					"id": "delegate-build~verify",
+					"citations": 0
+				},
+				{
+					"id": "verify~order-commits",
+					"citations": 0
+				},
+				{
+					"id": "order-commits~interrogate",
+					"citations": 0
+				},
+				{
+					"id": "interrogate~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "order-commits~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "delegate-build~throughput-checkpoint",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "refactoring",
+			"steps": 8,
+			"connectors": 8,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "pin-behaviour",
+					"warnings": 0,
+					"rows": ["0 Refactoring"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "name-structure",
+					"warnings": 0,
+					"rows": ["0 principle-model-the-domain"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "target-shape",
+					"warnings": 0,
+					"rows": [
+						"0 architect",
+						"0 principle-foundational-thinking",
+						"0 principle-redesign-from-first-principles"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "subtract-first",
+					"warnings": 0,
+					"rows": ["0 principle-subtract-before-you-add", "0 principle-laziness-protocol"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "small-steps",
+					"warnings": 0,
+					"rows": [
+						"0 poteto-agent",
+						"0 worker.md",
+						"0 pstack-models.mdc",
+						"0 principle-migrate-callers-then-delete-legacy-apis"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "prove-unchanged",
+					"warnings": 0,
+					"rows": ["0 principle-prove-it-works", "0 control-ui / control-cli"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "worth-keeping",
+					"warnings": 0,
+					"rows": ["0 principle-minimize-reader-load"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "commits-and-pr",
+					"warnings": 0,
+					"rows": ["0 principle-sequence-verifiable-units", "0 git", "0 Opening a PR"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "pin-behaviour~name-structure",
+					"citations": 0
+				},
+				{
+					"id": "name-structure~target-shape",
+					"citations": 0
+				},
+				{
+					"id": "target-shape~subtract-first",
+					"citations": 0
+				},
+				{
+					"id": "subtract-first~small-steps",
+					"citations": 0
+				},
+				{
+					"id": "small-steps~prove-unchanged",
+					"citations": 0
+				},
+				{
+					"id": "prove-unchanged~worth-keeping",
+					"citations": 0
+				},
+				{
+					"id": "worth-keeping~commits-and-pr",
+					"citations": 0
+				},
+				{
+					"id": "small-steps~small-steps",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "perf-issue",
+			"steps": 7,
+			"connectors": 7,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "baseline-trace",
+					"warnings": 0,
+					"rows": ["0 Perf issue", "0 control-ui / control-cli", "0 benchmark-checklist"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "ground-hypotheses",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "plan-and-delegate",
+					"warnings": 0,
+					"rows": ["0 architect", "0 poteto-agent", "0 worker.md", "0 pstack-models.mdc"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "post-fix-trace",
+					"warnings": 0,
+					"rows": ["0 control-ui / control-cli", "0 principle-sequence-verifiable-units"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "compare-artifacts",
+					"warnings": 0,
+					"rows": ["0 sqlite"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "cite-measurement",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "opening-a-pr",
+					"warnings": 0,
+					"rows": ["0 Opening a PR"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "baseline-trace~ground-hypotheses",
+					"citations": 0
+				},
+				{
+					"id": "ground-hypotheses~plan-and-delegate",
+					"citations": 0
+				},
+				{
+					"id": "plan-and-delegate~post-fix-trace",
+					"citations": 0
+				},
+				{
+					"id": "post-fix-trace~compare-artifacts",
+					"citations": 0
+				},
+				{
+					"id": "compare-artifacts~cite-measurement",
+					"citations": 0
+				},
+				{
+					"id": "cite-measurement~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "compare-artifacts~ground-hypotheses",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "hillclimb",
+			"steps": 9,
+			"connectors": 9,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "fix-metric",
+					"warnings": 0,
+					"rows": ["0 Hillclimb"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "freeze-harness",
+					"warnings": 0,
+					"rows": ["0 benchmark-checklist", "0 principle-build-the-lever"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "open-log",
+					"warnings": 0,
+					"rows": ["0 show-me-your-work", "0 log.sh", "0 decision-log-template.tsv"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "form-hypothesis",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "one-change",
+					"warnings": 0,
+					"rows": [
+						"0 poteto-agent",
+						"0 worker.md",
+						"0 pstack-models.mdc",
+						"0 principle-separate-before-serializing-shared-state",
+						"0 principle-guard-the-context-window"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "measure",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "keep-or-revert",
+					"warnings": 0,
+					"rows": ["0 git", "0 log.sh", "0 principle-sequence-verifiable-units"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "stop-check",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "opening-a-pr",
+					"warnings": 0,
+					"rows": ["0 Opening a PR"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "fix-metric~freeze-harness",
+					"citations": 0
+				},
+				{
+					"id": "freeze-harness~open-log",
+					"citations": 0
+				},
+				{
+					"id": "open-log~form-hypothesis",
+					"citations": 0
+				},
+				{
+					"id": "form-hypothesis~one-change",
+					"citations": 0
+				},
+				{
+					"id": "one-change~measure",
+					"citations": 0
+				},
+				{
+					"id": "measure~keep-or-revert",
+					"citations": 0
+				},
+				{
+					"id": "keep-or-revert~stop-check",
+					"citations": 0
+				},
+				{
+					"id": "stop-check~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "stop-check~form-hypothesis",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "prototype",
+			"steps": 6,
+			"connectors": 7,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "scope-decision",
+					"warnings": 0,
+					"rows": ["0 Prototype"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "gather-references",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "build-throwaway",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "one-switcher",
+					"warnings": 0,
+					"rows": ["0 principle-exhaust-the-design-space"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "observe",
+					"warnings": 0,
+					"rows": ["0 control-ui / control-cli"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "recommend",
+					"warnings": 0,
+					"rows": ["0 architect"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "scope-decision~gather-references",
+					"citations": 0
+				},
+				{
+					"id": "gather-references~build-throwaway",
+					"citations": 0
+				},
+				{
+					"id": "build-throwaway~one-switcher",
+					"citations": 0
+				},
+				{
+					"id": "one-switcher~observe",
+					"citations": 0
+				},
+				{
+					"id": "observe~recommend",
+					"citations": 0
+				},
+				{
+					"id": "scope-decision~build-throwaway",
+					"citations": 0
+				},
+				{
+					"id": "observe~build-throwaway",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "visual-parity",
+			"steps": 6,
+			"connectors": 6,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "baseline-harness",
+					"warnings": 0,
+					"rows": ["0 Visual parity"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "hold-the-rules",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "shared-primitives",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "migrate-component",
+					"warnings": 0,
+					"rows": [
+						"0 poteto-agent",
+						"0 worker.md",
+						"0 principle-separate-before-serializing-shared-state"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "image-diff",
+					"warnings": 0,
+					"rows": ["0 control-ui / control-cli", "0 /loop"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "opening-a-pr",
+					"warnings": 0,
+					"rows": ["0 Opening a PR"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "baseline-harness~hold-the-rules",
+					"citations": 0
+				},
+				{
+					"id": "hold-the-rules~shared-primitives",
+					"citations": 0
+				},
+				{
+					"id": "shared-primitives~migrate-component",
+					"citations": 0
+				},
+				{
+					"id": "migrate-component~image-diff",
+					"citations": 0
+				},
+				{
+					"id": "image-diff~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "image-diff~migrate-component",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "authoring-a-skill",
+			"steps": 4,
+			"connectors": 4,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "write-skill",
+					"warnings": 0,
+					"rows": [
+						"0 Authoring a skill",
+						"0 create-skill",
+						"0 principle-encode-lessons-in-structure"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "validate",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "test-cases",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "opening-a-pr",
+					"warnings": 0,
+					"rows": ["0 Opening a PR"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "write-skill~validate",
+					"citations": 0
+				},
+				{
+					"id": "validate~test-cases",
+					"citations": 0
+				},
+				{
+					"id": "test-cases~opening-a-pr",
+					"citations": 0
+				},
+				{
+					"id": "validate~opening-a-pr",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "eval",
+			"steps": 7,
+			"connectors": 6,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "frame",
+					"warnings": 0,
+					"rows": ["0 Eval"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "sanitized-dirs",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "organic-prompt",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "spawn-candidates",
+					"warnings": 0,
+					"rows": ["0 arena", "0 pstack-models.mdc"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "blinded-judge",
+					"warnings": 0,
+					"rows": ["0 arena"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "read-transcripts",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "synthesize",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "frame~sanitized-dirs",
+					"citations": 0
+				},
+				{
+					"id": "sanitized-dirs~organic-prompt",
+					"citations": 0
+				},
+				{
+					"id": "organic-prompt~spawn-candidates",
+					"citations": 0
+				},
+				{
+					"id": "spawn-candidates~blinded-judge",
+					"citations": 0
+				},
+				{
+					"id": "blinded-judge~read-transcripts",
+					"citations": 0
+				},
+				{
+					"id": "read-transcripts~synthesize",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "opening-a-pr",
+			"steps": 5,
+			"connectors": 4,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "worktree",
+					"warnings": 0,
+					"rows": ["0 Opening a PR", "0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "small-commits",
+					"warnings": 0,
+					"rows": ["0 git", "0 technical-writing"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "deslop",
+					"warnings": 0,
+					"rows": ["0 /deslop", "0 no-comments"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "title-and-body",
+					"warnings": 0,
+					"rows": ["0 unslop", "0 blast-radius"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "open-ready",
+					"warnings": 0,
+					"rows": ["0 gh / origin pr"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "worktree~small-commits",
+					"citations": 0
+				},
+				{
+					"id": "small-commits~deslop",
+					"citations": 0
+				},
+				{
+					"id": "deslop~title-and-body",
+					"citations": 0
+				},
+				{
+					"id": "title-and-body~open-ready",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "babysit",
+			"steps": 6,
+			"connectors": 8,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "declare-mode",
+					"warnings": 0,
+					"rows": ["0 Babysit"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "poll-status",
+					"warnings": 0,
+					"rows": ["0 watch-pr", "0 gh / origin pr"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "conflicts",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "review-threads",
+					"warnings": 0,
+					"rows": ["0 bugbot-triage.md", "0 gh / origin pr"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "ci",
+					"warnings": 0,
+					"rows": ["0 gh / origin pr"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "report-and-wait",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "declare-mode~poll-status",
+					"citations": 0
+				},
+				{
+					"id": "poll-status~conflicts",
+					"citations": 0
+				},
+				{
+					"id": "conflicts~review-threads",
+					"citations": 0
+				},
+				{
+					"id": "review-threads~ci",
+					"citations": 0
+				},
+				{
+					"id": "ci~report-and-wait",
+					"citations": 0
+				},
+				{
+					"id": "poll-status~report-and-wait",
+					"citations": 0
+				},
+				{
+					"id": "conflicts~report-and-wait",
+					"citations": 0
+				},
+				{
+					"id": "ci~poll-status",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "shipping",
+			"steps": 7,
+			"connectors": 9,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "verify-each-pr",
+					"warnings": 0,
+					"rows": ["0 Shipping", "0 control-ui / control-cli", "0 gh / origin pr"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "find-the-run",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "re-check-verdicts",
+					"warnings": 0,
+					"rows": ["0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "merge-lowest",
+					"warnings": 0,
+					"rows": ["0 gh / origin pr"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "retarget-next",
+					"warnings": 0,
+					"rows": ["0 gh / origin pr", "0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "watch-the-run",
+					"warnings": 0,
+					"rows": ["0 watch-pr", "0 /loop"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "stop-at-ceiling",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "verify-each-pr~find-the-run",
+					"citations": 0
+				},
+				{
+					"id": "find-the-run~re-check-verdicts",
+					"citations": 0
+				},
+				{
+					"id": "re-check-verdicts~merge-lowest",
+					"citations": 0
+				},
+				{
+					"id": "merge-lowest~retarget-next",
+					"citations": 0
+				},
+				{
+					"id": "retarget-next~watch-the-run",
+					"citations": 0
+				},
+				{
+					"id": "watch-the-run~stop-at-ceiling",
+					"citations": 0
+				},
+				{
+					"id": "retarget-next~merge-lowest",
+					"citations": 0
+				},
+				{
+					"id": "re-check-verdicts~verify-each-pr",
+					"citations": 0
+				},
+				{
+					"id": "stop-at-ceiling~verify-each-pr",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "multi-phase-plan",
+			"steps": 5,
+			"connectors": 4,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "skip-check",
+					"warnings": 0,
+					"rows": ["0 Multi-phase plan"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "settle-by-prototype",
+					"warnings": 0,
+					"rows": ["0 Prototype"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "write-plan-file",
+					"warnings": 0,
+					"rows": ["0 principle-sequence-verifiable-units"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "verification-boxes",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "hand-back",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "skip-check~settle-by-prototype",
+					"citations": 0
+				},
+				{
+					"id": "settle-by-prototype~write-plan-file",
+					"citations": 0
+				},
+				{
+					"id": "write-plan-file~verification-boxes",
+					"citations": 0
+				},
+				{
+					"id": "verification-boxes~hand-back",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "autonomous-run",
+			"steps": 6,
+			"connectors": 6,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "exit-condition",
+					"warnings": 0,
+					"rows": ["0 Autonomous run"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "wake-mechanism",
+					"warnings": 0,
+					"rows": ["0 /loop", "0 poteto-agent"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "smallest-change",
+					"warnings": 0,
+					"rows": ["0 principle-sequence-verifiable-units"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "verify-predicate",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "checkpoint-row",
+					"warnings": 0,
+					"rows": ["0 show-me-your-work", "0 log.sh"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "stop",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "exit-condition~wake-mechanism",
+					"citations": 0
+				},
+				{
+					"id": "wake-mechanism~smallest-change",
+					"citations": 0
+				},
+				{
+					"id": "smallest-change~verify-predicate",
+					"citations": 0
+				},
+				{
+					"id": "verify-predicate~checkpoint-row",
+					"citations": 0
+				},
+				{
+					"id": "checkpoint-row~stop",
+					"citations": 0
+				},
+				{
+					"id": "checkpoint-row~smallest-change",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "autopilot-full",
+			"steps": 8,
+			"connectors": 10,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "operator-gates",
+					"warnings": 0,
+					"rows": ["0 Autopilot-full"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "spawn-owners",
+					"warnings": 0,
+					"rows": [
+						"0 worker.md",
+						"0 Opening a PR",
+						"0 Babysit",
+						"0 show-me-your-work",
+						"0 log.sh",
+						"0 gh / origin pr"
+					],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "code-ready-head",
+					"warnings": 0,
+					"rows": ["0 /deslop", "0 no-comments", "0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "swarm-verify",
+					"warnings": 0,
+					"rows": ["0 swarm", "0 control-ui / control-cli", "0 pstack-models.mdc"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "merge-prep",
+					"warnings": 0,
+					"rows": ["0 git", "0 gh / origin pr"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "owner-merges",
+					"warnings": 0,
+					"rows": ["0 gh / origin pr", "0 Shipping"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "root-audit",
+					"warnings": 0,
+					"rows": ["0 /loop", "0 ketchup"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "stand-down",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "operator-gates~spawn-owners",
+					"citations": 0
+				},
+				{
+					"id": "spawn-owners~code-ready-head",
+					"citations": 0
+				},
+				{
+					"id": "code-ready-head~swarm-verify",
+					"citations": 0
+				},
+				{
+					"id": "swarm-verify~merge-prep",
+					"citations": 0
+				},
+				{
+					"id": "merge-prep~owner-merges",
+					"citations": 0
+				},
+				{
+					"id": "swarm-verify~code-ready-head",
+					"citations": 0
+				},
+				{
+					"id": "owner-merges~merge-prep",
+					"citations": 0
+				},
+				{
+					"id": "operator-gates~root-audit",
+					"citations": 0
+				},
+				{
+					"id": "root-audit~root-audit",
+					"citations": 0
+				},
+				{
+					"id": "root-audit~stand-down",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "autopilot-stack",
+			"steps": 5,
+			"connectors": 4,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "autopilot-full",
+					"warnings": 0,
+					"rows": ["0 Autopilot-stack", "0 Autopilot-full"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "stack-if-dependent",
+					"warnings": 0,
+					"rows": ["0 Opening a PR", "0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "restack",
+					"warnings": 0,
+					"rows": ["0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "stop-at-verified",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "hand-to-operator",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "autopilot-full~stack-if-dependent",
+					"citations": 0
+				},
+				{
+					"id": "stack-if-dependent~restack",
+					"citations": 0
+				},
+				{
+					"id": "restack~stop-at-verified",
+					"citations": 0
+				},
+				{
+					"id": "stop-at-verified~hand-to-operator",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "session-pickup",
+			"steps": 5,
+			"connectors": 4,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "locate-trail",
+					"warnings": 0,
+					"rows": ["0 Session pickup", "0 principle-guard-the-context-window", "0 poteto-agent"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "rebuild-state",
+					"warnings": 0,
+					"rows": ["0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "done-versus-pending",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "route",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "verify-inherited",
+					"warnings": 0,
+					"rows": ["0 principle-prove-it-works"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "locate-trail~rebuild-state",
+					"citations": 0
+				},
+				{
+					"id": "rebuild-state~done-versus-pending",
+					"citations": 0
+				},
+				{
+					"id": "done-versus-pending~route",
+					"citations": 0
+				},
+				{
+					"id": "route~verify-inherited",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "pause-safely",
+			"steps": 4,
+			"connectors": 3,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "safe-boundary",
+					"warnings": 0,
+					"rows": ["0 Pause safely"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "nothing-irreversible",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "wip-commit",
+					"warnings": 0,
+					"rows": ["0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "resume-note",
+					"warnings": 0,
+					"rows": ["0 show-me-your-work"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "safe-boundary~nothing-irreversible",
+					"citations": 0
+				},
+				{
+					"id": "nothing-irreversible~wip-commit",
+					"citations": 0
+				},
+				{
+					"id": "wip-commit~resume-note",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "worktree-cleanup",
+			"steps": 6,
+			"connectors": 5,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "snapshot-and-audit",
+					"warnings": 0,
+					"rows": ["0 Worktree cleanup", "0 worktree-audit.sh", "0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "cross-check-pins",
+					"warnings": 0,
+					"rows": ["0 principle-prove-it-works"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "verify-usage",
+					"warnings": 0,
+					"rows": ["0 principle-guard-the-context-window", "0 poteto-agent"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "pause-on-loss",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "prune",
+					"warnings": 0,
+					"rows": ["0 git"],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "simulators-and-caches",
+					"warnings": 0,
+					"rows": ["0 xcrun simctl"],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "snapshot-and-audit~cross-check-pins",
+					"citations": 0
+				},
+				{
+					"id": "cross-check-pins~verify-usage",
+					"citations": 0
+				},
+				{
+					"id": "verify-usage~pause-on-loss",
+					"citations": 0
+				},
+				{
+					"id": "pause-on-loss~prune",
+					"citations": 0
+				},
+				{
+					"id": "prune~simulators-and-caches",
+					"citations": 0
+				}
+			]
+		}
+	]
+}

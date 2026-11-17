@@ -1,0 +1,229 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="autopilot-full" name="Autopilot-full" source=pstack>
+  <@by><playbook-ref of=pstack name="autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/></@by>
+  <@summary>
+    "You own the verdicts, never the PRs. One owner carries each PR from build to merge, and nothing merges until your swarm, which never wrote the code, has proven the code that lands."
+  </@summary>
+  <@order label="Ends with" lead="owners merge verified PRs">
+    Reply: catch the operator up per the ketchup skill: each PR's state and verdict, what merged, countersigns and why, open operator gates, parked follow-ups, with links to each PR and the trails.
+  </@order>
+
+  <@step id="operator-gates" title="Operator gates" phrase="The grant covers only queue items"
+    group="plan" human>
+    <@what>
+      Items the operator names as theirs, and PRs outside the queue, stop at merge-ready. "A request to state the plan is not a go."
+    </@what>
+    <@actor>The operator</@actor>
+    <@gate>The grant, in prompt text</@gate>
+
+    <@row kind="playbook" name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+  </@step>
+
+  <@step id="spawn-owners" title="Spawn owners" phrase="One cloud agent per PR" group="build">
+    <@what>
+      Each owner builds, opens its PR early so CI and bots run alongside, proves the change on the real artifact, babysits to green, and merges once cleared. Owners run in parallel off trunk, never stacked. "Assume the VM dies": each pushes early and keeps a decision trail in the root agent's store.
+    </@what>
+    <@actor>One Cursor cloud agent per PR</@actor>
+    <@handoff to="opening-a-pr"/>
+    <@handoff to="babysit"/>
+
+    <@row kind="reference" name="worker.md" path="skills/poteto-mode/worker.md"
+      by="first line of every agent kickoff">
+      Rules every spawned agent reads first: no extra gates, never ask a person, PR format.
+    </@row>
+    <@row kind="playbook" name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"
+      by="model, named in this step">
+      How each owner opens its PR.
+    </@row>
+    <@row kind="playbook" name="Babysit" path="skills/poteto-mode/playbooks/babysit.md"
+      by="model, named in this step">
+      How each owner gets to green. Here the owner rebases its own branch.
+    </@row>
+    <@row kind="skill" name="show-me-your-work" path="skills/show-me-your-work/SKILL.md"
+      by="model, named in this step">
+      Decision trail: one row per attempt or step.
+    </@row>
+    <@row kind="script" name="log.sh" path="skills/show-me-your-work/scripts/log.sh"
+      by="model, via show-me-your-work">
+      Appends one row to the decision log.
+    </@row>
+    <@row kind="binary" name="gh / origin pr"
+      gloss="GitHub CLI; Origin CLI when it resolves the repository" by="model">
+      Every PR operation. Graphite (gt) is never required.
+    </@row>
+  </@step>
+
+  <@step id="code-ready-head" title="Code-ready head" phrase="Deslop, no-comments, rebase, report"
+    group="build">
+    <@what>
+      The code is ready only after <skill-ref of=pstack name="/deslop"/> and <skill-ref of=pstack name="no-comments" path="skills/no-comments/SKILL.md"/>. Then rebase onto current trunk and report the code-ready head before self-proof. The repo's checks for the touched paths run on the committed head before the push.
+    </@what>
+    <@actor>Each owner</@actor>
+    <@output>A reported head SHA</@output>
+
+    <@row kind="skill" name="/deslop" gloss="cursor-team-kit plugin (not in pstack)" by="model">
+      Strips slop from the diff before commit.
+    </@row>
+    <@row kind="skill" name="no-comments" path="skills/no-comments/SKILL.md"
+      by="model, named in this step">
+      Removes comments that restate the code.
+    </@row>
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+  </@step>
+
+  <@step id="swarm-verify" title="Swarm-verify" phrase="Independent verifiers, once, at that SHA"
+    group="check">
+    <@what>
+      Verifiers re-run the gates, prove the load-bearing behaviour live through the control skill, and audit the diff. "Block a PR only for a problem you can show, with a failing run at the head or a doc line the PR made wrong." A problem the base already has does not block.
+    </@what>
+    <@actor>The root's swarm, which never wrote the code</@actor>
+    <@output>A verdict per PR</@output>
+    <@gate>The verdict is not clean without the live lane (prompt text)</@gate>
+
+    <@row kind="skill" name="swarm" path="skills/swarm/SKILL.md" by="model, named in this step">
+      Fans out independent workers or verifiers.
+    </@row>
+    <@row kind="skill" name="control-ui / control-cli" gloss="cursor-team-kit plugin (not in pstack)"
+      by="model; \"the matching control skill\"">
+      Drives the real UI or CLI the way a user would.
+    </@row>
+    <@row kind="rule" name="pstack-models.mdc" gloss="~/.cursor/rules/pstack-models.mdc"
+      by="written by /setup-pstack; read by the model">
+      Per-role model lines. Each code playbook reads its own line.
+    </@row>
+  </@step>
+
+  <@step id="merge-prep" title="Merge prep" phrase="Rebase on trunk; wait for green CI" group="ship">
+    <@what>
+      "Green CI alone never authorizes a merge." Once the swarm's lanes have started, merge prep rebases onto current trunk, reports the new head and waits for green CI.
+    </@what>
+    <@actor>Each owner</@actor>
+
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+    <@row kind="binary" name="gh / origin pr"
+      gloss="GitHub CLI; Origin CLI when it resolves the repository" by="model">
+      Every PR operation. Graphite (gt) is never required.
+    </@row>
+  </@step>
+
+  <@step id="owner-merges" title="Owner merges" phrase="Only what the swarm verified" group="ship">
+    <@what>
+      Right before merging, fetch trunk and ask whether its changes can affect the patch. Rebase only when the code that would land was never tested: a conflict, a file both sides changed, or a change to which checks run.
+    </@what>
+    <@actor>Each owner</@actor>
+    <@gate>
+      Prompt text. The forge's own required approvals still apply: "Never give or bypass an approval the forge enforces"
+    </@gate>
+
+    <@row kind="binary" name="gh / origin pr"
+      gloss="GitHub CLI; Origin CLI when it resolves the repository" by="model">
+      Every PR operation. Graphite (gt) is never required.
+    </@row>
+    <@row kind="playbook" name="Shipping" path="skills/poteto-mode/playbooks/shipping.md"
+      by="model, named in this step">
+      Its patch-id rule decides whether a lane's result carries to a new head.
+    </@row>
+  </@step>
+
+  <@step id="root-audit" title="Root audit" phrase="/loop 1h probes every agent" group="check">
+    <@what>
+      Each tick re-reads this playbook from trunk, fixes drift in the record, and probes every agent down to the leaf lanes, judging each by its side effects. An agent is stuck when it errors, cannot start turns, or shows nothing new past its stuck-after runtime. "Replace a stuck agent at once." Anything that loosens a gate needs a verifier's proof and the root's countersign.
+    </@what>
+    <@actor>The root agent</@actor>
+    <@gate>
+      The hourly tick is the harness's <tool-ref name="/loop"/>; what it checks is prompt text
+    </@gate>
+
+    <@row kind="tool" name="/loop" gloss="Cursor built-in command (not in pstack)" by="model">
+      Re-runs a prompt on an interval or when a watcher fires.
+    </@row>
+    <@row kind="skill" name="ketchup" path="skills/ketchup/SKILL.md" by="model, named in this step">
+      Catches the operator up after a tick that changed something.
+    </@row>
+  </@step>
+
+  <@step id="stand-down" title="Stand down" phrase="Operator's stop: zero writes" group="plan" human>
+    <@what>
+      "A hold reaches every owner as a zero-writes order. Each reports where it stands and keeps its brief until the operator releases it."
+    </@what>
+    <@actor>The operator</@actor>
+  </@step>
+
+  <@connector from="operator-gates" to="spawn-owners"/>
+
+  <@connector from="spawn-owners" to="code-ready-head"/>
+
+  <@connector from="code-ready-head" to="swarm-verify"/>
+
+  <@connector from="swarm-verify" to="merge-prep"/>
+
+  <@connector from="merge-prep" to="owner-merges"/>
+
+  <@connector from="swarm-verify" to="code-ready-head" label="blocking problem: fix round" enforced="prompt">
+    <@when>The swarm shows a bug a user would hit, a failed gate or a wrong shipped doc.</@when>
+    <@by>model</@by>
+    <@how>
+      The owner fixes. A rebase, a conflict resolution or a minor fix then gets a single verifier at the new head; a wording-only change gets none; new behaviour, a redesign or a large new diff gets another full swarm.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/> step 4
+    </@source>
+  </@connector>
+
+  <@connector from="owner-merges" to="merge-prep" label="trunk affects the patch" enforced="prompt">
+    <@when>Trunk changed something the patch touches or depends on.</@when>
+    <@by>model</@by>
+    <@how>
+      Rebase and wait for CI when the code that would land was never tested. When trunk changed a caller or a dependency, run the patch's checks on the merge result and merge on a pass.
+    </@how>
+    <@bound>a third rebase past merge prep: hold and report to the root</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/> step 5
+    </@source>
+  </@connector>
+
+  <@connector from="operator-gates" to="root-audit" label="operator's go: arm the audit" enforced="prompt">
+    <@when>The operator says go.</@when>
+    <@by>human</@by>
+    <@how>
+      "arm <tool-ref name="/loop"/> 1h to audit until no delegated work is left, because long runs drift and agents stall silently." It runs alongside the owners.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/> step 6
+    </@source>
+  </@connector>
+
+  <@connector from="root-audit" to="root-audit" label="every hour" enforced="harness">
+    <@when>Delegated work is left.</@when>
+    <@by>the <tool-ref name="/loop"/> timer</@by>
+    <@how>
+      A tick that changed something for the operator ends with a ketchup; one that changed nothing stays quiet.
+    </@how>
+    <@bound>until no delegated work is left</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/> step 6
+    </@source>
+  </@connector>
+
+  <@connector from="root-audit" to="stand-down" pick enforced="prompt">
+    <@when>The operator says stop.</@when>
+    <@by>human</@by>
+    <@how>Stand down at once.</@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/> step 7
+    </@source>
+  </@connector>
+</lane>

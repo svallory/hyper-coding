@@ -1,0 +1,220 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="router" name="How a request reaches a playbook" source=pstack>
+  <@by><skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/></@by>
+  <@summary>
+    The human types <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/>; the model matches the request to one of 22 titles and copies that playbook's steps into the todo tool. PR status and landing are separate requests.
+  </@summary>
+  <@order label="How it is chosen" lead="the model reads a list of titles; no code">
+    "Match the task to a playbook and open its steps at playbooks/&lt;title>.md, with the title in kebab case. Copy its steps into the todolist tool first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/> skill."
+  </@order>
+
+  <@step id="poteto-mode" title="/poteto-mode" phrase="Human types it; goal restated" group="plan" human>
+    <@what>
+      The skill has disable-model-invocation: true, so the model cannot load it on its own. "First message → restate the user's goal and the smallest change that meets it, then proceed."
+    </@what>
+    <@actor>Human, then main agent</@actor>
+    <@input>A request</@input>
+    <@output>Goal and smallest change, restated</@output>
+    <@gate>None in code</@gate>
+
+    <@row kind="skill" name="poteto-mode" path="skills/poteto-mode/SKILL.md"
+      by="human types /poteto-mode">
+      Non-negotiables, 24 principles, autonomy rules, subagent models and the list of 22 playbook titles.
+    </@row>
+    <@row kind="rule" name="pstack-models.mdc" gloss="~/.cursor/rules/pstack-models.mdc"
+      by="written by /setup-pstack; read by the model">
+      Per-role model lines. Each code playbook reads its own line.
+    </@row>
+  </@step>
+
+  <@step id="match-playbook" title="Match playbook" phrase="Model picks one of 22 titles" group="plan">
+    <@what>
+      The 22 titles are one comma-separated sentence at the end of the skill. No trigger table, no keywords, no code. The Non-negotiables add a few direct routes: PR status goes to <playbook-ref of=pstack name="Babysit" path="skills/poteto-mode/playbooks/babysit.md"/>, landing a green stack goes to Shipping, a fork that running something would settle goes to Prototype.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@input>The restated goal</@input>
+    <@output>One playbook file opened; its steps in the todo tool</@output>
+    <@gate>None. The model's reading of the request is the router</@gate>
+
+    <@row kind="playbook" name="22 playbooks" gloss="skills/poteto-mode/playbooks/<title>.md"
+      by="model, by title">
+      One ordered step list per kind of task.
+    </@row>
+  </@step>
+
+  <@step id="figure-it-out" title="Figure it out" phrase="No title fits; large or unattended"
+    group="plan">
+    <@what>The fallback skill: the agent designs its own playbook before any code.</@what>
+    <@actor>Main agent</@actor>
+    <@output>A designed phase list the human reviews</@output>
+    <@handoff to="figure-it-out"/>
+
+    <@row kind="skill" name="figure-it-out" path="skills/figure-it-out/SKILL.md"
+      by="model, per poteto-mode">
+      Frame, design a workflow, run a hypothesis loop, keep a trail, verify the whole.
+    </@row>
+  </@step>
+
+  <@step id="run-playbook" title="Run playbook" phrase="Follow its steps from the todo list"
+    group="build">
+    <@what>
+      The chat that received <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> runs the playbook itself. Subagents it spawns are <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/>, in the background, each started with "Read &lt;path>/worker.md before anything else."
+    </@what>
+    <@actor>Main agent and its subagents</@actor>
+    <@input>The playbook's numbered steps</@input>
+    <@output>Whatever the playbook's Reply line asks for</@output>
+    <@gate>None in code; nothing checks that a step was done or in what order</@gate>
+    <@handoff to="investigation"/>
+    <@handoff to="runtime-forensics"/>
+    <@handoff to="trace-forensics"/>
+    <@handoff to="bug-fix"/>
+    <@handoff to="feature"/>
+    <@handoff to="refactoring"/>
+    <@handoff to="perf-issue"/>
+    <@handoff to="hillclimb"/>
+    <@handoff to="prototype"/>
+    <@handoff to="visual-parity"/>
+    <@handoff to="authoring-a-skill"/>
+    <@handoff to="eval"/>
+    <@handoff to="multi-phase-plan"/>
+    <@handoff to="autonomous-run"/>
+    <@handoff to="autopilot-full"/>
+    <@handoff to="autopilot-stack"/>
+    <@handoff to="session-pickup"/>
+    <@handoff to="pause-safely"/>
+    <@handoff to="worktree-cleanup"/>
+
+    <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" by="main agent, Task tool">
+      Subagent type for any subagent a playbook step spawns. Background, fresh per task.
+    </@row>
+    <@row kind="reference" name="worker.md" path="skills/poteto-mode/worker.md"
+      by="first line of every agent kickoff">
+      Rules every spawned agent reads first: no extra gates, never ask a person, PR format.
+    </@row>
+    <@row kind="rule" name="pstack-models.mdc" gloss="~/.cursor/rules/pstack-models.mdc"
+      by="written by /setup-pstack; read by the model">
+      Per-role model lines. Each code playbook reads its own line.
+    </@row>
+  </@step>
+
+  <@step id="opening-a-pr" title="Opening a PR" phrase="Last step of code-changing playbooks"
+    group="ship">
+    <@what>
+      Bug fix, Feature, Refactoring, Perf issue, Hillclimb, Visual parity and Authoring a skill end with "Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>".
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A ready PR</@output>
+    <@handoff to="opening-a-pr"/>
+
+    <@row kind="playbook" name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"
+      by="model; last step of this playbook">
+      The shared closing playbook.
+    </@row>
+  </@step>
+
+  <@step id="babysit" title="Babysit" phrase="Only when asked for PR status" group="ship" human>
+    <@what>
+      "PR status → the <playbook-ref of=pstack name="Babysit" path="skills/poteto-mode/playbooks/babysit.md"/> playbook, not Cursor's built-in babysit skill."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A merge-ready PR, or a report of what blocks it</@output>
+    <@gate>"Babysitting never authorizes merging"</@gate>
+    <@handoff to="babysit"/>
+
+    <@row kind="playbook" name="Babysit" path="skills/poteto-mode/playbooks/babysit.md"
+      by="model, on a PR-status request">
+      Clears conflicts, threads and CI on one PR at a time.
+    </@row>
+  </@step>
+
+  <@step id="shipping" title="Shipping" phrase="Only when asked to land" group="ship" human>
+    <@what>"Landing a green stack → the Shipping playbook."</@what>
+    <@actor>Main agent; non-author verifiers</@actor>
+    <@output>Merged PRs up to the verified ceiling</@output>
+    <@handoff to="shipping"/>
+
+    <@row kind="playbook" name="Shipping" path="skills/poteto-mode/playbooks/shipping.md"
+      by="model, on a landing request">
+      Verifies each PR independently and lands the verified run bottom-up.
+    </@row>
+  </@step>
+
+  <@connector from="poteto-mode" to="match-playbook"/>
+
+  <@connector from="match-playbook" to="figure-it-out" pick enforced="prompt">
+    <@when>No playbook title fits, or the work is large, cross-cutting or unattended.</@when>
+    <@by>model</@by>
+    <@how>
+      The model decides while reading the request. The human can also type <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/> directly.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/>, Playbooks
+    </@source>
+  </@connector>
+
+  <@connector from="match-playbook" to="run-playbook" label="a title fits" enforced="prompt">
+    <@when>The request matches one of the 22 titles.</@when>
+    <@by>model</@by>
+    <@how>
+      The model opens playbooks/&lt;title>.md and copies the steps into the todo tool. Nothing confirms the choice with the human.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/>, Playbooks
+    </@source>
+  </@connector>
+
+  <@connector from="figure-it-out" to="opening-a-pr" label="its own workflow" inferred enforced="prompt">
+    <@when>
+      The workflow <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/> designed reaches a PR.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/> does not say "Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>". It says to commit the decision trail "so the reviewer can read it in the PR", which implies one.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/>, Phase D
+    </@source>
+  </@connector>
+
+  <@connector from="run-playbook" to="opening-a-pr" pick enforced="prompt">
+    <@when>
+      The playbook is one of the seven that end with "Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>".
+    </@when>
+    <@by>model</@by>
+    <@how>
+      Investigation, both forensics, Prototype, Eval, Multi-phase plan, Session pickup, Pause safely and Worktree cleanup end with a reply instead. <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> itself claims it is "Invoked at the end of every other playbook".
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      each playbook's last step
+    </@source>
+  </@connector>
+
+  <@connector from="opening-a-pr" to="babysit" pick enforced="prompt">
+    <@when>A human asks for the PR's status.</@when>
+    <@by>human</@by>
+    <@how>
+      "<playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> does not start a babysit." The exception is Autopilot-full, whose owners babysit their own PRs.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> · <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/> step 2
+    </@source>
+  </@connector>
+
+  <@connector from="babysit" to="shipping" pick enforced="prompt">
+    <@when>A human asks to land.</@when>
+    <@by>human</@by>
+    <@how>"Owner approval is a wait. Babysitting never authorizes merging."</@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Babysit" path="skills/poteto-mode/playbooks/babysit.md"/>
+    </@source>
+  </@connector>
+</lane>

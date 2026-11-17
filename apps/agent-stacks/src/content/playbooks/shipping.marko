@@ -1,0 +1,154 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="shipping" name="Shipping" source=pstack>
+  <@by><playbook-ref of=pstack name="shipping" path="skills/poteto-mode/playbooks/shipping.md"/></@by>
+  <@summary>
+    "You own what lands. Verify each PR independently, land only the verified run from the root, then keep your hands off the stack."
+  </@summary>
+  <@order label="Ends with" lead="merged PRs up to the ceiling">
+    Reply: the verified run and its ceiling, each PR's verdict and who produced it, what landed and how you confirmed it, and what the next gap needs.
+  </@order>
+
+  <@step id="verify-each-pr" title="Verify each PR" phrase="One non-author verifier per PR" group="check">
+    <@what>
+      Each verifier is a Cursor cloud agent that runs the change the way a user would, parent against head, and posts PASS, PASS+NOTES or FAIL on the PR. "Only a verdict from an agent that did not write the code counts." "Green CI and an approving bot review are not verdicts."
+    </@what>
+    <@actor>One cloud agent per PR</@actor>
+    <@output>A verdict comment on each PR</@output>
+    <@gate>The verdict, in prompt text; nothing checks who posted it</@gate>
+
+    <@row kind="playbook" name="Shipping" path="skills/poteto-mode/playbooks/shipping.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+    <@row kind="skill" name="control-ui / control-cli" gloss="cursor-team-kit plugin (not in pstack)"
+      by="model; \"the matching control skill\"">
+      Drives the real UI or CLI the way a user would.
+    </@row>
+    <@row kind="binary" name="gh / origin pr"
+      gloss="GitHub CLI; Origin CLI when it resolves the repository" by="model">
+      Every PR operation. Graphite (gt) is never required.
+    </@row>
+  </@step>
+
+  <@step id="find-the-run" title="Find the run" phrase="Contiguous verified PRs from the bottom"
+    group="plan">
+    <@what>
+      Walk up from the lowest unmerged PR and stop at the first one without PASS or PASS+NOTES. The PRs below it are the run; the top one is the ceiling.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The run and its ceiling</@output>
+  </@step>
+
+  <@step id="re-check-verdicts" title="Re-check verdicts" phrase="git patch-id at verdict versus head"
+    group="check">
+    <@what>
+      "A verdict covers a patch, and a chain rebase moves every PR above it to a new SHA without failing any check." Compare git patch-id at the verdict SHA with the current head before trusting an older verdict.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@gate>patch-id is computed by git; comparing it is prompt text</@gate>
+
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+  </@step>
+
+  <@step id="merge-lowest" title="Merge lowest" phrase="One PR; read the state back" group="ship">
+    <@what>
+      origin pr merge &lt;pr> or gh pr merge &lt;pr> --squash, always the run's lowest unmerged PR. Read the PR back, "because a merge command can report success when a merge queue only queued the PR". Auto-merge is armed only on a PR whose verdict covers its current head.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A PR that reads merged with trunk as its base</@output>
+
+    <@row kind="binary" name="gh / origin pr"
+      gloss="GitHub CLI; Origin CLI when it resolves the repository" by="model">
+      Every PR operation. Graphite (gt) is never required.
+    </@row>
+  </@step>
+
+  <@step id="retarget-next" title="Retarget next" phrase="Base to trunk; force-with-lease" group="ship">
+    <@what>
+      Retarget the PR whose base was the merged branch to trunk, move its patch onto the merge result, and push with --force-with-lease. The patch-id rule decides whether its verdict survives.
+    </@what>
+    <@actor>Main agent</@actor>
+
+    <@row kind="binary" name="gh / origin pr"
+      gloss="GitHub CLI; Origin CLI when it resolves the repository" by="model">
+      Every PR operation. Graphite (gt) is never required.
+    </@row>
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+  </@step>
+
+  <@step id="watch-the-run" title="Watch the run" phrase="watch-pr --queued-stack until COMPLETE"
+    group="check">
+    <@what>
+      "Leave the stack alone while it lands." On GitHub, <script-ref of=pstack name="watch-pr" path="skills/poteto-mode/scripts/watch-pr/watch-pr"/> --queued-stack under <tool-ref name="/loop"/>, with the run's PR numbers bottom-to-top in --stack-prs. "If a merge stalls, find out why before you change anything."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@gate>
+      COMPLETE is computed in code; the watcher sweeps the queue every 300 s and merges nothing
+    </@gate>
+
+    <@row kind="script" name="watch-pr" path="skills/poteto-mode/scripts/watch-pr/watch-pr" by="model">
+      Bun CLI, read-only toward GitHub. Polls every 60 s and exits 0 ready, 2 conflicts, 3 unresolved threads, 4 failing checks, 5 timeout, 6 merge gate, 7 query failure. It reports; it never merges or pushes.
+    </@row>
+    <@row kind="tool" name="/loop" gloss="Cursor built-in command (not in pstack)" by="model">
+      Re-runs a prompt on an interval or when a watcher fires.
+    </@row>
+  </@step>
+
+  <@step id="stop-at-ceiling" title="Stop at ceiling" phrase="More needs new verdicts" group="ship">
+    <@what>"Extending the run takes new verdicts, so it is a new pass through step 1."</@what>
+    <@actor>Main agent</@actor>
+  </@step>
+
+  <@connector from="verify-each-pr" to="find-the-run"/>
+
+  <@connector from="find-the-run" to="re-check-verdicts"/>
+
+  <@connector from="re-check-verdicts" to="merge-lowest"/>
+
+  <@connector from="merge-lowest" to="retarget-next"/>
+
+  <@connector from="retarget-next" to="watch-the-run"/>
+
+  <@connector from="watch-the-run" to="stop-at-ceiling"/>
+
+  <@connector from="retarget-next" to="merge-lowest" label="next PR in the run" enforced="prompt">
+    <@when>The retargeted PR's checks pass and its verdict survives.</@when>
+    <@by>model</@by>
+    <@how>
+      "Land bottom-up, one PR at a time." "Merge it once its checks pass and its verdict survives."
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Shipping" path="skills/poteto-mode/playbooks/shipping.md"/> step 4
+    </@source>
+  </@connector>
+
+  <@connector from="re-check-verdicts" to="verify-each-pr" label="patch changed: re-verify" enforced="prompt">
+    <@when>git patch-id differs between the verdict SHA and the head.</@when>
+    <@by>model</@by>
+    <@how>
+      A diff only in tests, docs or lint config can keep a lane's result if the build is the same apart from noise. Anything else that drifted is re-verified.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Shipping" path="skills/poteto-mode/playbooks/shipping.md"/> step 3
+    </@source>
+  </@connector>
+
+  <@connector from="stop-at-ceiling" to="verify-each-pr" label="extend the run" outer enforced="prompt">
+    <@when>More PRs above the ceiling should land.</@when>
+    <@by>model</@by>
+    <@how>A new pass through step 1.</@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Shipping" path="skills/poteto-mode/playbooks/shipping.md"/> step 6
+    </@source>
+  </@connector>
+</lane>

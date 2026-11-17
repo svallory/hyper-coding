@@ -1,0 +1,140 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="perf-issue" name="Perf issue" source=pstack>
+  <@by><playbook-ref of=pstack name="perf-issue" path="skills/poteto-mode/playbooks/perf-issue.md"/></@by>
+  <@summary>
+    "You own the measurement story." "Tie every fix to a measurement, don't read source instead of measuring." Sustained improvement belongs to Hillclimb.
+  </@summary>
+  <@order label="Ends with" lead="Opening a PR">
+    Reply: baseline number, post-fix number, delta, artifact path.
+  </@order>
+
+  <@step id="baseline-trace" title="Baseline trace" phrase="Capture and vet the number" group="check">
+    <@what>
+      Through the matching control skill. The baseline, and each later number, is vetted with <skill-ref of=pstack name="benchmark-checklist" path="skills/benchmark-checklist/SKILL.md"/>.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A baseline trace</@output>
+
+    <@row kind="playbook" name="Perf issue" path="skills/poteto-mode/playbooks/perf-issue.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+    <@row kind="skill" name="control-ui / control-cli" gloss="cursor-team-kit plugin (not in pstack)"
+      by="model; \"the matching control skill\"">
+      Drives the real UI or CLI the way a user would.
+    </@row>
+    <@row kind="skill" name="benchmark-checklist" path="skills/benchmark-checklist/SKILL.md"
+      by="model, named in this step">
+      Checks a measured number before it is trusted.
+    </@row>
+  </@step>
+
+  <@step id="ground-hypotheses" title="Ground hypotheses" phrase="Seven mantras, cheapest first"
+    group="plan">
+    <@what>
+      In order: don't do it; do it, but don't do it again; do it less; do it later; do it when they're not looking; do it concurrently; do it cheaper. "When an earlier mantra meets the target, stop." "Don't claim a perf ceiling without running it first."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@handoff to="hillclimb"/>
+  </@step>
+
+  <@step id="plan-and-delegate" title="Plan and delegate" phrase="Architect if needed; subagent builds"
+    group="build">
+    <@what>
+      Plan the fix from the trace. Across a function boundary: architect first. A subagent on the configured perf-issue model implements; the main agent reviews the diff.
+    </@what>
+    <@actor>
+      Main agent leads; a <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/> subagent writes
+    </@actor>
+
+    <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
+      Designs the shape of a change that crosses a function boundary. It runs arena.
+    </@row>
+    <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" by="main agent, Task tool">
+      Subagent type for any subagent a playbook step spawns. Background, fresh per task.
+    </@row>
+    <@row kind="reference" name="worker.md" path="skills/poteto-mode/worker.md"
+      by="first line of every agent kickoff">
+      Rules every spawned agent reads first: no extra gates, never ask a person, PR format.
+    </@row>
+    <@row kind="rule" name="pstack-models.mdc" gloss="~/.cursor/rules/pstack-models.mdc"
+      by="written by /setup-pstack; read by the model">
+      Per-role model lines. Each code playbook reads its own line.
+    </@row>
+  </@step>
+
+  <@step id="post-fix-trace" title="Post-fix trace" phrase="Capture after the change" group="check">
+    <@what>"Capture a post-fix trace." Each attempt is verified before the next is tried.</@what>
+    <@actor>Main agent</@actor>
+
+    <@row kind="skill" name="control-ui / control-cli" gloss="cursor-team-kit plugin (not in pstack)"
+      by="model; \"the matching control skill\"">
+      Drives the real UI or CLI the way a user would.
+    </@row>
+    <@row kind="skill" name="principle-sequence-verifiable-units"
+      path="skills/principle-sequence-verifiable-units/SKILL.md"
+      by="model; the step cites this principle">
+      Verify each unit before starting the next.
+    </@row>
+  </@step>
+
+  <@step id="compare-artifacts" title="Compare artifacts" phrase="JSON to sqlite, then diff"
+    group="check">
+    <@what>
+      "Parse and compare the artifacts (JSON to <binary-ref of=pstack name="sqlite"/>, diff). Inconclusive or wrong-surface is not a pass. Flag it."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>Baseline, post-fix and delta</@output>
+    <@gate>Prompt text</@gate>
+
+    <@row kind="binary" name="sqlite" gloss="sqlite CLI" by="model, named in this step">
+      Holds both traces for the diff.
+    </@row>
+  </@step>
+
+  <@step id="cite-measurement" title="Cite measurement" phrase="The number goes in the PR" group="ship">
+    <@what>"Cite the measurement in the PR."</@what>
+    <@actor>Main agent</@actor>
+  </@step>
+
+  <@step id="opening-a-pr" title="Opening a PR" phrase="Run the shared PR playbook" group="ship">
+    <@what>"Run Opening a PR."</@what>
+    <@actor>Main agent</@actor>
+    <@output>A ready (not draft) PR</@output>
+    <@gate>None in code</@gate>
+    <@handoff to="opening-a-pr"/>
+
+    <@row kind="playbook" name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"
+      by="model; last step of this playbook">
+      The shared closing playbook.
+    </@row>
+  </@step>
+
+  <@connector from="baseline-trace" to="ground-hypotheses"/>
+
+  <@connector from="ground-hypotheses" to="plan-and-delegate"/>
+
+  <@connector from="plan-and-delegate" to="post-fix-trace"/>
+
+  <@connector from="post-fix-trace" to="compare-artifacts"/>
+
+  <@connector from="compare-artifacts" to="cite-measurement"/>
+
+  <@connector from="cite-measurement" to="opening-a-pr"/>
+
+  <@connector from="compare-artifacts" to="ground-hypotheses" label="target not met: next mantra" inferred
+    enforced="prompt">
+    <@when>The comparison shows the target is not met.</@when>
+    <@by>model</@by>
+    <@how>
+      The playbook orders the mantras and says to verify "each attempt before trying the next". That the next attempt starts from the next mantra is our reading.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Perf issue" path="skills/poteto-mode/playbooks/perf-issue.md"/> steps 2-3
+    </@source>
+  </@connector>
+</lane>

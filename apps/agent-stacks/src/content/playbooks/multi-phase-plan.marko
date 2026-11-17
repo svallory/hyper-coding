@@ -1,0 +1,80 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="multi-phase-plan" name="Multi-phase plan" source=pstack>
+  <@by><playbook-ref of=pstack name="multi-phase-plan" path="skills/poteto-mode/playbooks/multi-phase-plan.md"/></@by>
+  <@summary>
+    "You own the plan, not the code. The plan is a checklist an owner runs box by box and the operator audits from the evidence." "The plan is the deliverable. Do not implement."
+  </@summary>
+  <@order label="Ends with" lead="a plan file; waits for the operator">
+    Reply: the plan path, the PR ids with their dependencies and the review-gated set, and what stays unproven.
+  </@order>
+
+  <@step id="skip-check" title="Skip check" phrase="One or two files: no plan" group="plan">
+    <@what>
+      "When the change is one or two files with an obvious approach, skip the plan. Say so and stop."
+    </@what>
+    <@actor>Main agent</@actor>
+
+    <@row kind="playbook" name="Multi-phase plan"
+      path="skills/poteto-mode/playbooks/multi-phase-plan.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+  </@step>
+
+  <@step id="settle-by-prototype" title="Settle by prototype" phrase="Run it; ask only preference calls"
+    group="plan">
+    <@what>
+      "Settle open questions by prototype before you write." Ask the operator only about a product or preference call that no run can settle.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@handoff to="prototype"/>
+
+    <@row kind="playbook" name="Prototype" path="skills/poteto-mode/playbooks/prototype.md"
+      by="model, named in this step">
+      Settles a fork by running something.
+    </@row>
+  </@step>
+
+  <@step id="write-plan-file" title="Write plan file" phrase="PR order, dependency graph, checkboxes"
+    group="plan">
+    <@what>
+      Opens with what changes, the PR ids in landing order and the dependency graph: which PRs branch from trunk, which wait for which, and the files each may touch. Then one section per PR with checkboxes for what it depends on, the files it edits, the one change it builds, the result you see, and its verification.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The plan file</@output>
+
+    <@row kind="skill" name="principle-sequence-verifiable-units"
+      path="skills/principle-sequence-verifiable-units/SKILL.md"
+      by="model; the step cites this principle">
+      Verify each unit before starting the next.
+    </@row>
+  </@step>
+
+  <@step id="verification-boxes" title="Verification boxes" phrase="Unit, live and perf per PR"
+    group="check">
+    <@what>
+      "Tests alone are not sufficient verification." Each live box drives the real surface with a concrete scenario and a pass predicate. The perf box names the metric, the probe, the trunk baseline measured first, and the number that fails. A PR that changes an interaction waits for the operator's review before merge.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@gate>The boxes are checked later by whoever runs the plan; nothing reads them</@gate>
+  </@step>
+
+  <@step id="hand-back" title="Hand back" phrase="Plan path; wait for go" group="plan" human>
+    <@what>
+      "Hand back the plan path and stop. Execution starts on the operator's explicit go."
+    </@what>
+    <@actor>The operator</@actor>
+    <@gate>The operator's go, in prompt text</@gate>
+  </@step>
+
+  <@connector from="skip-check" to="settle-by-prototype"/>
+
+  <@connector from="settle-by-prototype" to="write-plan-file"/>
+
+  <@connector from="write-plan-file" to="verification-boxes"/>
+
+  <@connector from="verification-boxes" to="hand-back"/>
+</lane>

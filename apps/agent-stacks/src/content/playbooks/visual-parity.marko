@@ -1,0 +1,110 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="visual-parity" name="Visual parity" source=pstack>
+  <@by><playbook-ref of=pstack name="visual-parity" path="skills/poteto-mode/playbooks/visual-parity.md"/></@by>
+  <@summary>
+    "You own pixel-exact equivalence. The baseline is the spec. You do not touch it." Equivalence is verified by image diff, not by eye.
+  </@summary>
+  <@order label="Ends with" lead="Opening a PR per component">
+    Reply: components migrated, the diff result for each, the baseline harness location, what is left.
+  </@order>
+
+  <@step id="baseline-harness" title="Baseline harness" phrase="Screenshots of every state, first"
+    group="check">
+    <@what>
+      A visual regression harness that screenshots the current component across its states, plus the target when matching two implementations. "No baseline, no parity claim. A blocking prerequisite, not a follow-up."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The baseline</@output>
+
+    <@row kind="playbook" name="Visual parity" path="skills/poteto-mode/playbooks/visual-parity.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+  </@step>
+
+  <@step id="hold-the-rules" title="Hold the rules" phrase="No harness, baseline or structure edits"
+    group="plan" human>
+    <@what>
+      "no harness modifications, no baseline tampering, no component restructuring to make a diff pass. If the baseline looks wrong, stop and ask, don't edit it."
+    </@what>
+    <@actor>Main agent; the human if the baseline looks wrong</@actor>
+    <@gate>Prompt text; nothing protects the baseline files</@gate>
+  </@step>
+
+  <@step id="shared-primitives" title="Shared primitives" phrase="Migrate these first; blocks the rest"
+    group="build">
+    <@what>"Shared primitives migrate first as a blocking phase."</@what>
+    <@actor>Main agent</@actor>
+  </@step>
+
+  <@step id="migrate-component" title="Migrate component" phrase="One at a time, own worktree"
+    group="build">
+    <@what>Parallelize across worktrees, one owner per component.</@what>
+    <@actor>One owner subagent per component</@actor>
+
+    <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" by="main agent, Task tool">
+      Subagent type for any subagent a playbook step spawns. Background, fresh per task.
+    </@row>
+    <@row kind="reference" name="worker.md" path="skills/poteto-mode/worker.md"
+      by="first line of every agent kickoff">
+      Rules every spawned agent reads first: no extra gates, never ask a person, PR format.
+    </@row>
+    <@row kind="skill" name="principle-separate-before-serializing-shared-state"
+      path="skills/principle-separate-before-serializing-shared-state/SKILL.md"
+      by="model; the step cites this principle">
+      Split the shared target before serializing writers.
+    </@row>
+  </@step>
+
+  <@step id="image-diff" title="Image diff" phrase="A nonzero diff is a fail" group="check">
+    <@what>
+      Each component against its baseline, on the matching surface, through the control skill. "Investigate the pixel delta."
+    </@what>
+    <@actor>The component's owner</@actor>
+    <@gate>Diff equals zero, read by the model from the harness output</@gate>
+
+    <@row kind="skill" name="control-ui / control-cli" gloss="cursor-team-kit plugin (not in pstack)"
+      by="model; \"the matching control skill\"">
+      Drives the real UI or CLI the way a user would.
+    </@row>
+    <@row kind="tool" name="/loop" gloss="Cursor built-in command (not in pstack)" by="model">
+      Re-runs a prompt on an interval or when a watcher fires.
+    </@row>
+  </@step>
+
+  <@step id="opening-a-pr" title="Opening a PR" phrase="Run the shared PR playbook" group="ship">
+    <@what>"Run Opening a PR." "per component or per safe batch".</@what>
+    <@actor>Main agent</@actor>
+    <@output>A ready (not draft) PR</@output>
+    <@gate>None in code</@gate>
+    <@handoff to="opening-a-pr"/>
+
+    <@row kind="playbook" name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"
+      by="model; last step of this playbook">
+      The shared closing playbook.
+    </@row>
+  </@step>
+
+  <@connector from="baseline-harness" to="hold-the-rules"/>
+
+  <@connector from="hold-the-rules" to="shared-primitives"/>
+
+  <@connector from="shared-primitives" to="migrate-component"/>
+
+  <@connector from="migrate-component" to="image-diff"/>
+
+  <@connector from="image-diff" to="opening-a-pr"/>
+
+  <@connector from="image-diff" to="migrate-component" label="diff not zero" enforced="prompt">
+    <@when>The image diff is nonzero.</@when>
+    <@by>model</@by>
+    <@how>"<tool-ref name="/loop"/> per component until the diff is zero."</@how>
+    <@bound>until zero; no cap</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Visual parity" path="skills/poteto-mode/playbooks/visual-parity.md"/> step 4
+    </@source>
+  </@connector>
+</lane>

@@ -1,0 +1,108 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="autonomous-run" name="Autonomous run" source=pstack>
+  <@by><playbook-ref of=pstack name="autonomous-run" path="skills/poteto-mode/playbooks/autonomous-run.md"/></@by>
+  <@summary>"You own the exit condition. Define done, then drive to it without stopping."</@summary>
+  <@order label="Ends with" lead="the predicate met">
+    Reply: the exit condition, iterations run, what landed, what was discarded, final predicate state.
+  </@order>
+
+  <@step id="exit-condition" title="Exit condition" phrase="A checkable predicate, stated first"
+    group="plan">
+    <@what>
+      Before the first iteration: tests green, repro fixed, all N PRs merged, pixel-diff zero.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The predicate</@output>
+
+    <@row kind="playbook" name="Autonomous run" path="skills/poteto-mode/playbooks/autonomous-run.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+  </@step>
+
+  <@step id="wake-mechanism" title="Wake mechanism" phrase="/loop with a watcher or heartbeat"
+    group="plan">
+    <@what>
+      An event to watch (CI, a merge, a ref advancing) gets a watcher subagent with a long time-based heartbeat as fallback. No event gets a fixed-interval heartbeat.
+    </@what>
+    <@actor>Main agent</@actor>
+
+    <@row kind="tool" name="/loop" gloss="Cursor built-in command (not in pstack)" by="model">
+      Re-runs a prompt on an interval or when a watcher fires.
+    </@row>
+    <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" by="main agent, Task tool">
+      Subagent type for any subagent a playbook step spawns. Background, fresh per task.
+    </@row>
+  </@step>
+
+  <@step id="smallest-change" title="Smallest change" phrase="What the evidence justifies" group="build">
+    <@what>
+      Mid-run discoveries that support the goal are the agent's to fix through poteto-mode, each in its own PR. "Do not park reversible work for the human or use AskQuestion."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@handoff to="router"/>
+
+    <@row kind="skill" name="principle-sequence-verifiable-units"
+      path="skills/principle-sequence-verifiable-units/SKILL.md"
+      by="model; the step cites this principle">
+      Verify each unit before starting the next.
+    </@row>
+  </@step>
+
+  <@step id="verify-predicate" title="Verify predicate" phrase="Commit if it advanced, else discard"
+    group="check">
+    <@what>"Belt-and-suspenders that might help gets reverted, not left to ride."</@what>
+    <@actor>Main agent</@actor>
+    <@gate>The step 1 predicate, checked by the model</@gate>
+  </@step>
+
+  <@step id="checkpoint-row" title="Checkpoint row" phrase="What changed; did the predicate move"
+    group="learn">
+    <@what>
+      Every iteration, through <skill-ref of=pstack name="show-me-your-work" path="skills/show-me-your-work/SKILL.md"/>.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>One row</@output>
+
+    <@row kind="skill" name="show-me-your-work" path="skills/show-me-your-work/SKILL.md"
+      by="model, named in this step">
+      Decision trail: one row per attempt or step.
+    </@row>
+    <@row kind="script" name="log.sh" path="skills/show-me-your-work/scripts/log.sh"
+      by="model, via show-me-your-work">
+      Appends one row to the decision log.
+    </@row>
+  </@step>
+
+  <@step id="stop" title="Stop" phrase="Predicate met; never relaxed" group="check">
+    <@what>
+      "A plateau is not a stop, so keep going and pivot your approach to push past it. Surface a genuine dead end rather than spinning, and never relax the predicate to declare victory."
+    </@what>
+    <@actor>Main agent</@actor>
+  </@step>
+
+  <@connector from="exit-condition" to="wake-mechanism"/>
+
+  <@connector from="wake-mechanism" to="smallest-change"/>
+
+  <@connector from="smallest-change" to="verify-predicate"/>
+
+  <@connector from="verify-predicate" to="checkpoint-row"/>
+
+  <@connector from="checkpoint-row" to="stop"/>
+
+  <@connector from="checkpoint-row" to="smallest-change" label="predicate not met" enforced="prompt">
+    <@when>The predicate is not met.</@when>
+    <@by>model</@by>
+    <@how>
+      Next iteration. Only irreversible actions, product or preference calls no experiment can settle, or a real dead end are surfaced to the human.
+    </@how>
+    <@bound>none; no iteration cap</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Autonomous run" path="skills/poteto-mode/playbooks/autonomous-run.md"/> steps 3-6
+    </@source>
+  </@connector>
+</lane>

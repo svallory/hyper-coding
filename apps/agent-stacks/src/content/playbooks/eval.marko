@@ -1,0 +1,97 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="eval" name="Eval" source=pstack>
+  <@by><playbook-ref of=pstack name="eval" path="skills/poteto-mode/playbooks/eval.md"/></@by>
+  <@summary>
+    "You own the experiment design. Plan, blind, run, synthesize." Candidates must not learn they are being tested.
+  </@summary>
+  <@order label="Ends with" lead="a recommendation; no PR">
+    Reply: variant under test, rubric, per-candidate notes, judge's verdict, your synthesis, and a recommendation for whether to promote the variant.
+  </@order>
+
+  <@step id="frame" title="Frame" phrase="Variant, success, judge-only rubric" group="plan">
+    <@what>
+      State the variant under test and what behaviour counts as success. Write a rubric of 3 to 6 concrete criteria, for the judge only.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The rubric</@output>
+
+    <@row kind="playbook" name="Eval" path="skills/poteto-mode/playbooks/eval.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+  </@step>
+
+  <@step id="sanitized-dirs" title="Sanitized dirs" phrase="One per candidate, no test words"
+    group="build">
+    <@what>
+      A working directory per candidate with the variant in place and the context an organic task would have. None of eval, test, judge, experiment, rubric, score, compare, benchmark, candidate or arena may appear in any directory, file or prompt the candidate sees.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@gate>The word list is prompt text; nothing scans for it</@gate>
+  </@step>
+
+  <@step id="organic-prompt" title="Organic prompt" phrase="What a user would type" group="build">
+    <@what>
+      "State the goal, not the meta." No cue asking the candidate to list the skills or files it applied. Do not tell it other candidates exist.
+    </@what>
+    <@actor>Main agent</@actor>
+  </@step>
+
+  <@step id="spawn-candidates" title="Spawn candidates" phrase="N models, same prompt, parallel"
+    group="build">
+    <@what>
+      On different models, per the arena skill's Phase B. Each works in its own sanitized directory.
+    </@what>
+    <@actor>N candidate subagents</@actor>
+
+    <@row kind="skill" name="arena" path="skills/arena/SKILL.md" by="model, named in this step">
+      Several runners on different models build the same thing; a cross-judge picks.
+    </@row>
+    <@row kind="rule" name="pstack-models.mdc" gloss="~/.cursor/rules/pstack-models.mdc"
+      by="written by /setup-pstack; read by the model">
+      Per-role model lines. Each code playbook reads its own line.
+    </@row>
+  </@step>
+
+  <@step id="blinded-judge" title="Blinded judge" phrase="Different model family, labels only"
+    group="check">
+    <@what>
+      One judge, per the arena skill's Phase C. It sees outputs by sanitized label and the rubric, never a model name. Two variants are scored by one judge in a single pass on one scale.
+    </@what>
+    <@actor>One judge subagent</@actor>
+    <@output>A verdict</@output>
+
+    <@row kind="skill" name="arena" path="skills/arena/SKILL.md" by="model, named in this step">
+      Several runners on different models build the same thing; a cross-judge picks.
+    </@row>
+  </@step>
+
+  <@step id="read-transcripts" title="Read transcripts" phrase="Which files each really opened"
+    group="check">
+    <@what>
+      Read each candidate's local transcript under the active workspace's agent-transcripts/ directory. "Grade chain-following from the files it really read plus the shape of the code, never from the candidate's own claims." Do not glob across other projects' transcripts.
+    </@what>
+    <@actor>Main agent</@actor>
+  </@step>
+
+  <@step id="synthesize" title="Synthesize" phrase="Read every output; compare to judge" group="learn">
+    <@what>"Disagreement means a model is biased or the rubric is ambiguous."</@what>
+    <@actor>Main agent</@actor>
+    <@output>A recommendation to promote the variant or not</@output>
+  </@step>
+
+  <@connector from="frame" to="sanitized-dirs"/>
+
+  <@connector from="sanitized-dirs" to="organic-prompt"/>
+
+  <@connector from="organic-prompt" to="spawn-candidates"/>
+
+  <@connector from="spawn-candidates" to="blinded-judge"/>
+
+  <@connector from="blinded-judge" to="read-transcripts"/>
+
+  <@connector from="read-transcripts" to="synthesize"/>
+</lane>
