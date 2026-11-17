@@ -1,0 +1,73 @@
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="hyper" name="Hyper planning loop" by="this project" status="proposed, not built">
+  <@summary>
+    For reference: the loop proposed for hyper, run at every level (workstream, epic, task, step).
+  </@summary>
+  <@cover col="req" level="explicit">Define</@cover>
+  <@cover col="base" level="explicit">Baseline</@cover>
+  <@cover col="design" level="explicit">Design</@cover>
+  <@cover col="tasks" level="explicit">Decompose</@cover>
+  <@cover col="verify" level="explicit">Verify, at every level</@cover>
+  <@cover col="learn" level="absent">not in the proposal</@cover>
+  <@gap>No step keeps what was learned for the next piece of work.</@gap>
+
+  <@step id="define" title="Define" phrase="What is true when done" group="plan" human>
+    <@what>Acceptance criteria written as end states, each with the check that proves it.</@what>
+    <@actor>Author of the level above; the operator at the workstream.</@actor>
+    <@output>Define section</@output>
+    <@gate>Each check can fail and covers what its criterion claims.</@gate>
+  </@step>
+
+  <@step id="baseline" title="Baseline" phrase="What is true now" group="plan">
+    <@what>The verified facts the design relies on.</@what>
+    <@actor>Whoever designs this level.</@actor>
+    <@output>Baseline section</@output>
+    <@gate>Every fact cites a file or a command run now.</@gate>
+  </@step>
+
+  <@step id="design" title="Design" phrase="Path from baseline to done" group="plan">
+    <@what>One approach chosen; every criterion traced to it; baseline facts named.</@what>
+    <@actor>Architect at epic level; lead or dev elsewhere.</@actor>
+    <@output>Design section (one line when trivial)</@output>
+    <@gate>Every criterion is traced.</@gate>
+  </@step>
+
+  <@step id="decompose" title="Decompose" phrase="Children, each written as a Define" group="plan">
+    <@what>
+      Intermediate states in dependency order. Each child receives its Define from here.
+    </@what>
+    <@actor>Author of this level.</@actor>
+    <@output>Child Defines</@output>
+    <@gate>Every criterion is owned by a child; each child can be verified alone.</@gate>
+  </@step>
+
+  <@step id="build" title="Build" phrase="Children run the same loop" group="build">
+    <@what>Each child runs this loop one level down. A leaf is one PR: dev plus reviewer.</@what>
+    <@actor>Squad lead, dev, reviewer.</@actor>
+    <@output>Merged PRs</@output>
+    <@gate>The child passes its own Verify.</@gate>
+  </@step>
+
+  <@step id="verify" title="Verify" phrase="Pass or fail per criterion" group="check">
+    <@what>Every criterion checked against the integrated result.</@what>
+    <@actor>The author of the Define.</@actor>
+    <@output>Pass/fail per criterion</@output>
+    <@gate>All criteria pass.</@gate>
+  </@step>
+
+  <@connector from="define" to="baseline"/>
+
+  <@connector from="baseline" to="design"/>
+
+  <@connector from="design" to="decompose"/>
+
+  <@connector from="decompose" to="build"/>
+
+  <@connector from="build" to="verify"/>
+
+  <@connector from="verify" to="design" label="replan"/>
+
+  <@connector from="build" to="baseline" label="fact wrong"/>
+</lane>

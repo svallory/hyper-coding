@@ -2,6 +2,167 @@
 	"page": "comparison",
 	"lanes": [
 		{
+			"id": "superpowers",
+			"steps": 8,
+			"connectors": 11,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "brainstorming",
+					"warnings": 0,
+					"rows": [
+						"0 SessionStart",
+						"1 run-hook.cmd",
+						"2 session-start",
+						"3 using-superpowers",
+						"0 brainstorming",
+						"1 visual-companion.md",
+						"2 start-server.sh",
+						"3 server.cjs",
+						"2 stop-server.sh"
+					],
+					"manualRows": 0,
+					"citations": 8
+				},
+				{
+					"id": "design-approval",
+					"warnings": 0,
+					"rows": ["0 brainstorming", "1 builder-check-prompt.md"],
+					"manualRows": 0,
+					"citations": 2
+				},
+				{
+					"id": "writing-plans",
+					"warnings": 0,
+					"rows": ["0 writing-plans"],
+					"manualRows": 0,
+					"citations": 1
+				},
+				{
+					"id": "workspace-setup",
+					"warnings": 0,
+					"rows": [
+						"0 subagent-driven-development",
+						"1 using-git-worktrees",
+						"1 sdd-workspace",
+						"2 sdd-repo",
+						"1 resuming.md",
+						"1 preflight.md",
+						"0 executing-plans",
+						"1 using-git-worktrees",
+						"1 sdd-workspace",
+						"1 test-driven-development"
+					],
+					"manualRows": 0,
+					"citations": 9
+				},
+				{
+					"id": "implement-task",
+					"warnings": 0,
+					"rows": [
+						"0 subagent-driven-development",
+						"1 batching.md",
+						"1 task-brief",
+						"1 implementer-prompt.md",
+						"1 handling-reports.md",
+						"0 executing-plans",
+						"1 task-start",
+						"2 task-brief",
+						"1 test-driven-development",
+						"2 writing-good-tests.md",
+						"1 systematic-debugging",
+						"1 verification-before-completion",
+						"1 task-done"
+					],
+					"manualRows": 0,
+					"citations": 11
+				},
+				{
+					"id": "task-review",
+					"warnings": 0,
+					"rows": [
+						"0 subagent-driven-development",
+						"1 review-package",
+						"1 task-reviewer-prompt.md",
+						"1 cannot-verify.md",
+						"1 fix-loop.md",
+						"2 re-review-prompt.md"
+					],
+					"manualRows": 0,
+					"citations": 6
+				},
+				{
+					"id": "whole-branch-review",
+					"warnings": 0,
+					"rows": [
+						"0 subagent-driven-development",
+						"1 final-review.md",
+						"2 review-package",
+						"2 code-reviewer.md",
+						"2 re-review-prompt.md",
+						"0 executing-plans",
+						"1 review-package",
+						"1 code-reviewer.md"
+					],
+					"manualRows": 0,
+					"citations": 8
+				},
+				{
+					"id": "finishing-branch",
+					"warnings": 0,
+					"rows": ["0 finishing-a-development-branch"],
+					"manualRows": 0,
+					"citations": 2
+				}
+			],
+			"connectorList": [
+				{
+					"id": "brainstorming~design-approval",
+					"citations": 1
+				},
+				{
+					"id": "design-approval~writing-plans",
+					"citations": 2
+				},
+				{
+					"id": "writing-plans~workspace-setup",
+					"citations": 1
+				},
+				{
+					"id": "workspace-setup~implement-task",
+					"citations": 2
+				},
+				{
+					"id": "implement-task~task-review",
+					"citations": 2
+				},
+				{
+					"id": "task-review~whole-branch-review",
+					"citations": 2
+				},
+				{
+					"id": "whole-branch-review~finishing-branch",
+					"citations": 2
+				},
+				{
+					"id": "implement-task~whole-branch-review",
+					"citations": 2
+				},
+				{
+					"id": "implement-task~implement-task",
+					"citations": 1
+				},
+				{
+					"id": "task-review~implement-task",
+					"citations": 2
+				},
+				{
+					"id": "whole-branch-review~whole-branch-review",
+					"citations": 2
+				}
+			]
+		},
+		{
 			"id": "pstack",
 			"steps": 9,
 			"connectors": 13,
@@ -192,6 +353,876 @@
 				},
 				{
 					"id": "learn-and-encode~route-and-restate",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "aihero",
+			"steps": 8,
+			"connectors": 12,
+			"manualConnectors": 8,
+			"stepList": [
+				{
+					"id": "grill",
+					"warnings": 0,
+					"rows": [
+						"0 grill-with-docs",
+						"1 grilling",
+						"1 domain-modeling",
+						"2 GLOSSARY-FORMAT.md",
+						"2 ADR-FORMAT.md",
+						"0 ask-matt",
+						"1 PHASE-BOUNDARIES.md"
+					],
+					"manualRows": 0,
+					"citations": 8
+				},
+				{
+					"id": "prototype",
+					"warnings": 0,
+					"rows": ["0 handoff", "0 prototype", "1 LOGIC.md", "1 UI.md"],
+					"manualRows": 0,
+					"citations": 6
+				},
+				{
+					"id": "to-spec",
+					"warnings": 0,
+					"rows": ["0 to-spec", "1 setup-matt-pocock-skills", "2 seed templates"],
+					"manualRows": 1,
+					"citations": 5
+				},
+				{
+					"id": "to-tickets",
+					"warnings": 0,
+					"rows": ["0 to-tickets", "1 setup-matt-pocock-skills", "2 seed templates"],
+					"manualRows": 1,
+					"citations": 5
+				},
+				{
+					"id": "implement",
+					"warnings": 0,
+					"rows": [
+						"0 implement",
+						"1 tdd",
+						"2 tests.md",
+						"2 mocking.md",
+						"2 codebase-design",
+						"3 DEEPENING.md",
+						"3 DESIGN-IT-TWICE.md",
+						"0 implement-spec",
+						"1 setup-matt-pocock-skills",
+						"1 tdd",
+						"2 tests.md",
+						"2 mocking.md",
+						"2 codebase-design"
+					],
+					"manualRows": 1,
+					"citations": 14
+				},
+				{
+					"id": "code-review",
+					"warnings": 0,
+					"rows": ["0 code-review", "1 setup-matt-pocock-skills"],
+					"manualRows": 1,
+					"citations": 3
+				},
+				{
+					"id": "pull-request",
+					"warnings": 0,
+					"rows": ["0 pr"],
+					"manualRows": 0,
+					"citations": 3
+				},
+				{
+					"id": "retro",
+					"warnings": 0,
+					"rows": ["0 retro", "1 writing-for-agents", "2 SKILL-MECHANICS.md"],
+					"manualRows": 0,
+					"citations": 6
+				}
+			],
+			"connectorList": [
+				{
+					"id": "grill~prototype",
+					"citations": 1
+				},
+				{
+					"id": "to-spec~to-tickets",
+					"citations": 2
+				},
+				{
+					"id": "to-tickets~implement",
+					"citations": 2
+				},
+				{
+					"id": "implement~code-review",
+					"citations": 2
+				},
+				{
+					"id": "code-review~pull-request",
+					"citations": 1
+				},
+				{
+					"id": "pull-request~retro",
+					"citations": 2
+				},
+				{
+					"id": "grill~to-spec",
+					"citations": 2
+				},
+				{
+					"id": "grill~implement",
+					"citations": 1
+				},
+				{
+					"id": "prototype~grill",
+					"citations": 2
+				},
+				{
+					"id": "to-tickets~to-tickets",
+					"citations": 1
+				},
+				{
+					"id": "code-review~implement",
+					"citations": 1
+				},
+				{
+					"id": "retro~grill",
+					"citations": 2
+				}
+			]
+		},
+		{
+			"id": "ce",
+			"steps": 7,
+			"connectors": 15,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "brainstorm",
+					"warnings": 0,
+					"rows": [
+						"0 ce-brainstorm",
+						"1 phase-0.md",
+						"2 visual-probes.md",
+						"3 light-webserver.js",
+						"1 dialogue.md",
+						"2 packs-resolve.py",
+						"2 slack-researcher.md",
+						"1 approaches.md",
+						"2 reasoning-elevation.md",
+						"3 peer-job-runner.py",
+						"4 elevation-dispatch.sh",
+						"1 plan-write.md",
+						"2 brainstorm-sections.md",
+						"1 handoff.md"
+					],
+					"manualRows": 0,
+					"citations": 18
+				},
+				{
+					"id": "plan",
+					"warnings": 0,
+					"rows": [
+						"0 ce-plan",
+						"1 research.md",
+						"2 packs-resolve.py",
+						"2 core researchers",
+						"2 conditional researchers",
+						"1 final-review.md",
+						"2 deepening-workflow.md",
+						"3 deepening agents",
+						"1 reasoning-elevation.md",
+						"1 plan-handoff.md",
+						"2 ce-doc-review",
+						"3 depth.md",
+						"4 lite personas",
+						"3 reviewer personas",
+						"3 cross-model-doc-review.sh"
+					],
+					"manualRows": 0,
+					"citations": 18
+				},
+				{
+					"id": "work",
+					"warnings": 0,
+					"rows": [
+						"0 ce-work",
+						"1 input-triage.md",
+						"2 work-intake.md",
+						"3 packs-resolve.py",
+						"1 return-to-caller.md",
+						"1 workspace-setup.md",
+						"1 execution-engines.md",
+						"1 execution-strategy.md",
+						"2 worker-model.md",
+						"1 cross-model-execution.md",
+						"2 unit-workspace.py",
+						"3 unit_workspace modules",
+						"2 peer-job-runner.py",
+						"3 cross-model-work.sh",
+						"4 implementation-worker.md",
+						"1 implementation-loop.md",
+						"2 figma-design-sync.md"
+					],
+					"manualRows": 0,
+					"citations": 23
+				},
+				{
+					"id": "simplify",
+					"warnings": 0,
+					"rows": [
+						"0 ce-simplify-code",
+						"1 single-pass.md",
+						"1 reviewer-dispatch.md",
+						"1 reviewer personas",
+						"1 standalone-report.md",
+						"2 structural-pass.md",
+						"3 structure-evidence.py",
+						"3 structure-reviewer.md"
+					],
+					"manualRows": 0,
+					"citations": 12
+				},
+				{
+					"id": "review",
+					"warnings": 0,
+					"rows": [
+						"0 ce-code-review",
+						"1 modes-and-output.md",
+						"1 scope.md",
+						"2 review-scope.py",
+						"1 depth-paths.md",
+						"1 intent-and-plan.md",
+						"1 select-and-route.md",
+						"1 cross-model-review.md",
+						"2 peer-job-runner.py",
+						"3 cross-model-adversarial-review.sh",
+						"1 dispatch-reviewers.md",
+						"2 reviewer personas",
+						"1 finish-input.md",
+						"2 finish-merge.md",
+						"3 findings-mechanics.py",
+						"2 validator-batch-template.md",
+						"2 finish-report.md"
+					],
+					"manualRows": 0,
+					"citations": 22
+				},
+				{
+					"id": "compound",
+					"warnings": 0,
+					"rows": [
+						"0 ce-compound",
+						"1 modes.md",
+						"1 lightweight.md",
+						"1 research.md",
+						"2 packs-resolve.py",
+						"1 session-history.md",
+						"2 session-history scripts",
+						"2 session-historian.md",
+						"1 form.md",
+						"1 assembly.md",
+						"2 validate-frontmatter.py",
+						"2 concepts-vocabulary.md",
+						"2 grounding-validation.md",
+						"2 validate-doc-claims.py",
+						"1 refresh-and-discoverability.md",
+						"1 enhancement.md"
+					],
+					"manualRows": 0,
+					"citations": 19
+				},
+				{
+					"id": "ship",
+					"warnings": 0,
+					"rows": [
+						"0 lfg",
+						"1 ce-test-browser",
+						"2 pipeline-orchestration.md",
+						"3 resolve-port.sh",
+						"2 route-and-report.md",
+						"1 shipping.md",
+						"1 ce-commit-push-pr",
+						"2 step references",
+						"2 apply-and-handoff.md",
+						"1 ce-babysit-pr",
+						"2 pipeline.md",
+						"2 pr-snapshot",
+						"2 intake-overlap",
+						"2 ce-resolve-pr-feedback",
+						"2 ce-debug"
+					],
+					"manualRows": 0,
+					"citations": 21
+				}
+			],
+			"connectorList": [
+				{
+					"id": "brainstorm~plan",
+					"citations": 2
+				},
+				{
+					"id": "plan~work",
+					"citations": 4
+				},
+				{
+					"id": "work~simplify",
+					"citations": 2
+				},
+				{
+					"id": "simplify~review",
+					"citations": 2
+				},
+				{
+					"id": "review~compound",
+					"citations": 2
+				},
+				{
+					"id": "compound~ship",
+					"citations": 2
+				},
+				{
+					"id": "brainstorm~work",
+					"citations": 1
+				},
+				{
+					"id": "work~review",
+					"citations": 2
+				},
+				{
+					"id": "review~ship",
+					"citations": 2
+				},
+				{
+					"id": "plan~brainstorm",
+					"citations": 1
+				},
+				{
+					"id": "plan~plan",
+					"citations": 2
+				},
+				{
+					"id": "work~work",
+					"citations": 1
+				},
+				{
+					"id": "review~review",
+					"citations": 2
+				},
+				{
+					"id": "ship~ship",
+					"citations": 2
+				},
+				{
+					"id": "compound~plan",
+					"citations": 1
+				}
+			]
+		},
+		{
+			"id": "omo",
+			"steps": 9,
+			"connectors": 17,
+			"manualConnectors": 1,
+			"stepList": [
+				{
+					"id": "ground",
+					"warnings": 0,
+					"rows": [
+						"0 skill-invocation-tracker",
+						"0 ulw-plan",
+						"1 full-workflow.md",
+						"1 explore",
+						"1 librarian",
+						"1 ast-grep"
+					],
+					"manualRows": 0,
+					"citations": 8
+				},
+				{
+					"id": "interview-and-approve",
+					"warnings": 0,
+					"rows": [
+						"0 ulw-plan",
+						"1 intent-clear.md",
+						"1 intent-unclear.md",
+						"1 stance-calibration.md",
+						"1 full-workflow.md",
+						"1 scaffold-plan.mjs",
+						"2 plan-templates.mjs"
+					],
+					"manualRows": 0,
+					"citations": 9
+				},
+				{
+					"id": "write-plan",
+					"warnings": 0,
+					"rows": [
+						"0 ulw-plan",
+						"1 full-workflow.md",
+						"2 scaffold-plan.mjs",
+						"3 plan-templates.mjs",
+						"2 plan-consultant",
+						"0 spawn-policy.ts",
+						"1 invocation-gate.ts",
+						"2 invocation-guard.ts"
+					],
+					"manualRows": 0,
+					"citations": 9
+				},
+				{
+					"id": "review-plan",
+					"warnings": 0,
+					"rows": [
+						"0 ulw-plan",
+						"1 full-workflow.md",
+						"2 plan-reviewer",
+						"0 spawn-policy.ts",
+						"1 invocation-gate.ts",
+						"2 invocation-guard.ts",
+						"2 skill-invocation-tracker.ts",
+						"1 plan-review-contract.ts",
+						"2 interaction-policy.ts"
+					],
+					"manualRows": 0,
+					"citations": 11
+				},
+				{
+					"id": "execute-plan",
+					"warnings": 0,
+					"rows": [
+						"0 ulw-execute-continuation",
+						"1 agent-end-eligibility.ts",
+						"1 boulder-eligibility.ts",
+						"0 ulw-execute",
+						"1 ulw-plan",
+						"1 ultrawork",
+						"1 mass-ulw",
+						"2 planning.md",
+						"1 git-master"
+					],
+					"manualRows": 0,
+					"citations": 11
+				},
+				{
+					"id": "verify-claim",
+					"warnings": 2,
+					"rows": [
+						"0 ulw-execute",
+						"1 omo-native-gate-reviewer",
+						"2 remove-ai-slops",
+						"2 programming",
+						"1 browser",
+						"1 web-terminal-visual-qa.mjs",
+						"0 claim-receipt",
+						"1 runtime-loader.ts",
+						"1 verdict.ts"
+					],
+					"manualRows": 0,
+					"citations": 13
+				},
+				{
+					"id": "final-verification",
+					"warnings": 0,
+					"rows": [
+						"0 ulw-execute-continuation",
+						"0 ulw-execute",
+						"1 omo-native-gate-reviewer",
+						"1 review-work"
+					],
+					"manualRows": 1,
+					"citations": 7
+				},
+				{
+					"id": "land-and-ship",
+					"warnings": 0,
+					"rows": ["0 ulw-execute", "1 git-master"],
+					"manualRows": 0,
+					"citations": 3
+				},
+				{
+					"id": "memory-recall",
+					"warnings": 0,
+					"rows": [
+						"0 kibitzer hooks",
+						"1 kibitzer/index.ts",
+						"2 recall-wiring.ts",
+						"3 memory-core",
+						"2 sidecar.ts",
+						"2 tools",
+						"2 delivery.ts",
+						"0 before_agent_start",
+						"1 memory-core",
+						"0 reflection trigger-wiring"
+					],
+					"manualRows": 0,
+					"citations": 9
+				}
+			],
+			"connectorList": [
+				{
+					"id": "ground~interview-and-approve",
+					"citations": 1
+				},
+				{
+					"id": "interview-and-approve~write-plan",
+					"citations": 1
+				},
+				{
+					"id": "write-plan~review-plan",
+					"citations": 1
+				},
+				{
+					"id": "review-plan~execute-plan",
+					"citations": 2
+				},
+				{
+					"id": "execute-plan~verify-claim",
+					"citations": 2
+				},
+				{
+					"id": "verify-claim~final-verification",
+					"citations": 2
+				},
+				{
+					"id": "final-verification~land-and-ship",
+					"citations": 2
+				},
+				{
+					"id": "land-and-ship~memory-recall",
+					"citations": 0
+				},
+				{
+					"id": "interview-and-approve~ground",
+					"citations": 1
+				},
+				{
+					"id": "review-plan~write-plan",
+					"citations": 2
+				},
+				{
+					"id": "review-plan~interview-and-approve",
+					"citations": 1
+				},
+				{
+					"id": "review-plan~review-plan",
+					"citations": 1
+				},
+				{
+					"id": "execute-plan~execute-plan",
+					"citations": 2
+				},
+				{
+					"id": "verify-claim~execute-plan",
+					"citations": 1
+				},
+				{
+					"id": "final-verification~execute-plan",
+					"citations": 1
+				},
+				{
+					"id": "land-and-ship~execute-plan",
+					"citations": 1
+				},
+				{
+					"id": "memory-recall~ground",
+					"citations": 2
+				}
+			]
+		},
+		{
+			"id": "lavra",
+			"steps": 9,
+			"connectors": 14,
+			"manualConnectors": 4,
+			"stepList": [
+				{
+					"id": "brainstorm",
+					"warnings": 0,
+					"rows": [
+						"0 SessionStart",
+						"1 auto-recall.sh",
+						"2 provision-memory.sh",
+						"2 knowledge-db.sh",
+						"0 lavra-design",
+						"1 lavra-brainstorm",
+						"2 brainstorming",
+						"2 repo-research-analyst",
+						"2 recall.sh"
+					],
+					"manualRows": 0,
+					"citations": 10
+				},
+				{
+					"id": "plan-into-beads",
+					"warnings": 0,
+					"rows": [
+						"0 lavra-design",
+						"1 lavra-plan",
+						"2 recall.sh",
+						"2 repo-research-analyst",
+						"2 learnings-researcher",
+						"2 best-practices-researcher",
+						"2 framework-docs-researcher",
+						"2 spec-flow-analyzer"
+					],
+					"manualRows": 0,
+					"citations": 10
+				},
+				{
+					"id": "research-revise",
+					"warnings": 0,
+					"rows": [
+						"0 lavra-design",
+						"1 lavra-research",
+						"2 recall.sh",
+						"2 architecture-strategist",
+						"2 code-simplicity-reviewer",
+						"2 best-practices-researcher",
+						"2 framework-docs-researcher",
+						"2 learnings-researcher",
+						"2 domain-matched agents"
+					],
+					"manualRows": 0,
+					"citations": 10
+				},
+				{
+					"id": "review-lock",
+					"warnings": 0,
+					"rows": [
+						"0 lavra-design",
+						"1 lavra-ceo-review",
+						"1 lavra-eng-review",
+						"2 recall.sh",
+						"2 architecture-strategist",
+						"2 code-simplicity-reviewer",
+						"2 security-sentinel",
+						"2 performance-oracle"
+					],
+					"manualRows": 0,
+					"citations": 10
+				},
+				{
+					"id": "execute-beads",
+					"warnings": 0,
+					"rows": [
+						"0 lavra-work",
+						"1 lavra-work",
+						"2 lavra-work-single",
+						"3 recall.sh",
+						"2 lavra-work-single",
+						"3 recall.sh",
+						"2 lavra-work-multi",
+						"3 recall.sh",
+						"3 sanitize-content.sh",
+						"3 extract-bead-context.sh",
+						"4 sanitize-content.sh",
+						"3 subagent-prompt.md",
+						"4 recall.sh",
+						"0 SubagentStop",
+						"1 subagent-wrapup.sh"
+					],
+					"manualRows": 0,
+					"citations": 16
+				},
+				{
+					"id": "review-goal-verify",
+					"warnings": 0,
+					"rows": [
+						"0 lavra-work-single",
+						"1 lavra-review",
+						"2 recall.sh",
+						"2 all installed agents",
+						"2 default-agents.md",
+						"2 code-simplicity-reviewer",
+						"1 goal-verifier",
+						"0 lavra-work",
+						"1 lavra-work-single",
+						"2 goal-verifier",
+						"1 lavra-review",
+						"0 lavra-work-multi",
+						"1 lavra-review",
+						"1 goal-verifier"
+					],
+					"manualRows": 0,
+					"citations": 16
+				},
+				{
+					"id": "browser-qa",
+					"warnings": 0,
+					"rows": ["0 lavra-qa"],
+					"manualRows": 0,
+					"citations": 2
+				},
+				{
+					"id": "ship",
+					"warnings": 0,
+					"rows": ["0 lavra-ship", "1 goal-verifier"],
+					"manualRows": 0,
+					"citations": 4
+				},
+				{
+					"id": "knowledge-capture",
+					"warnings": 0,
+					"rows": [
+						"0 PostToolUse",
+						"1 memory-capture.sh",
+						"2 knowledge-db.sh",
+						"2 memory-sanitize.sh",
+						"3 memorysanitize",
+						"0 SessionStart",
+						"1 auto-recall.sh",
+						"2 provision-memory.sh",
+						"2 knowledge-db.sh",
+						"0 SubagentStop",
+						"1 subagent-wrapup.sh",
+						"0 TeammateIdle",
+						"1 teammate-idle-check.sh",
+						"0 lavra-learn",
+						"1 recall.sh",
+						"0 lavra-retro"
+					],
+					"manualRows": 2,
+					"citations": 13
+				}
+			],
+			"connectorList": [
+				{
+					"id": "brainstorm~plan-into-beads",
+					"citations": 1
+				},
+				{
+					"id": "plan-into-beads~research-revise",
+					"citations": 1
+				},
+				{
+					"id": "research-revise~review-lock",
+					"citations": 1
+				},
+				{
+					"id": "review-lock~execute-beads",
+					"citations": 1
+				},
+				{
+					"id": "execute-beads~review-goal-verify",
+					"citations": 0
+				},
+				{
+					"id": "review-goal-verify~browser-qa",
+					"citations": 1
+				},
+				{
+					"id": "browser-qa~ship",
+					"citations": 0
+				},
+				{
+					"id": "ship~knowledge-capture",
+					"citations": 1
+				},
+				{
+					"id": "plan-into-beads~review-lock",
+					"citations": 2
+				},
+				{
+					"id": "review-goal-verify~ship",
+					"citations": 1
+				},
+				{
+					"id": "brainstorm~brainstorm",
+					"citations": 1
+				},
+				{
+					"id": "review-goal-verify~execute-beads",
+					"citations": 4
+				},
+				{
+					"id": "browser-qa~browser-qa",
+					"citations": 0
+				},
+				{
+					"id": "knowledge-capture~brainstorm",
+					"citations": 0
+				}
+			]
+		},
+		{
+			"id": "hyper",
+			"steps": 6,
+			"connectors": 7,
+			"manualConnectors": 0,
+			"stepList": [
+				{
+					"id": "define",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "baseline",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "design",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "decompose",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "build",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				},
+				{
+					"id": "verify",
+					"warnings": 0,
+					"rows": [],
+					"manualRows": 0,
+					"citations": 0
+				}
+			],
+			"connectorList": [
+				{
+					"id": "define~baseline",
+					"citations": 0
+				},
+				{
+					"id": "baseline~design",
+					"citations": 0
+				},
+				{
+					"id": "design~decompose",
+					"citations": 0
+				},
+				{
+					"id": "decompose~build",
+					"citations": 0
+				},
+				{
+					"id": "build~verify",
+					"citations": 0
+				},
+				{
+					"id": "verify~design",
+					"citations": 0
+				},
+				{
+					"id": "build~baseline",
 					"citations": 0
 				}
 			]

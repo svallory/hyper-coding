@@ -1,4 +1,10 @@
+import Superpowers from "./superpowers.marko";
 import Pstack from "./pstack.marko";
+import Aihero from "./aihero.marko";
+import Ce from "./ce.marko";
+import Omo from "./omo.marko";
+import Lavra from "./lavra.marko";
+import Hyper from "./hyper.marko";
 
 static const COLUMNS = [
   { key: "req", label: "Requirements" },
@@ -41,23 +47,46 @@ static const cols = COLUMNS.map((c) => c.key);
 </legend-key>
 
 <lane-nav label="Sections">
+  <Superpowers view="nav"/>
   <Pstack view="nav"/>
+  <Aihero view="nav" label="AI Hero"/>
+  <Ce view="nav" label="Compound"/>
+  <Omo view="nav"/>
+  <Lavra view="nav"/>
+  <Hyper view="nav" label="Hyper"/>
   <@section to="questions">Questions</@section>
   <@section to="mechanisms">Mechanisms</@section>
   <@section to="reading">Reading</@section>
 </lane-nav>
+<Superpowers view="flow"/>
 <Pstack view="flow"/>
-<!-- The other lanes go here, one per view, in the order of the navigation. -->
+<Aihero view="flow"/>
+<Ce view="flow"/>
+<Omo view="flow"/>
+<Lavra view="flow"/>
+<Hyper view="flow"/>
 
 <cover-table id="questions" title="Planning questions each stack answers" laneHeading="Stack">
   <@note>Explicit: a named artifact or section, with a gate. Implicit: done inside another step, with nothing to check.</@note>
   <for|c| of=COLUMNS><@col key=c.key>${c.label}</@col></for>
+  <Superpowers view="cover" cols=cols/>
   <Pstack view="cover" cols=cols/>
+  <Aihero view="cover" cols=cols/>
+  <Ce view="cover" cols=cols/>
+  <Omo view="cover" cols=cols/>
+  <Lavra view="cover" cols=cols/>
+  <Hyper view="cover" cols=cols/>
 </cover-table>
 
 <takeaways id="mechanisms" title="Mechanisms worth taking, and gaps" laneHeading="Stack" takesHeading="Worth taking"
   gapsHeading="Gaps">
+  <Superpowers view="takeaways"/>
   <Pstack view="takeaways"/>
+  <Aihero view="takeaways"/>
+  <Ce view="takeaways"/>
+  <Omo view="takeaways"/>
+  <Lavra view="takeaways"/>
+  <Hyper view="takeaways"/>
 </takeaways>
 
 <reading-list id="reading" title="My reading">
@@ -73,5 +102,11 @@ static const cols = COLUMNS.map((c) => c.key);
 </reading-list>
 
 <side-panel>
+  <Superpowers view="panels"/>
   <Pstack view="panels"/>
+  <Aihero view="panels"/>
+  <Ce view="panels"/>
+  <Omo view="panels"/>
+  <Lavra view="panels"/>
+  <Hyper view="panels"/>
 </side-panel>
