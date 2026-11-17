@@ -1,0 +1,163 @@
+import { KINDS } from "../../model/kinds";
+import type { Kind, Lane, Row, Step } from "../../model/types";
+
+export interface Input {
+  lane: Lane;
+  step: Step;
+}
+
+static const GROUPS = { plan: "Plan", build: "Build", check: "Check", ship: "Ship", learn: "Learn" } as const;
+
+/** The parts a step's tree names, counted by icon (one badge per icon), nested rows included. */
+static function badges(rows: Row[]): { icon: string; kind: Kind; count: number }[] {
+  const seen = new Set<string>();
+  const out = new Map<string, { icon: string; kind: Kind; count: number }>();
+  const walk = (list: Row[]) => {
+    for (const row of list) {
+      if (row.kind) {
+        const key = `${row.kind}:${row.path ?? row.name ?? ""}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          const icon = KINDS[row.kind].icon;
+          const entry = out.get(icon);
+          if (entry) entry.count += row.count ?? 1;
+          else out.set(icon, { icon, kind: row.kind, count: row.count ?? 1 });
+        }
+      }
+      walk(row.rows);
+    }
+  };
+  walk(rows);
+  return [...out.values()];
+}
+
+<const/lane=input.lane/>
+<const/step=input.step/>
+<const/href=`#${lane.id}/${step.id}`/>
+<const/parts=badges(step.rows)/>
+<div class="node" data-node data-group=step.group data-human=step.human style=`grid-row: 3; grid-column: ${step.index + 1}`>
+  <a class="node-link" data-step=step.id data-group=step.group href=href>
+    <span class="node-head">
+      <span class="node-num">${step.index + 1}</span>
+      <span class="node-group">${GROUPS[step.group]}</span>
+      <if=step.human>
+        <span class="node-human" data-human-marker title="A human decides here"><ui-icon id="manual"/> human</span>
+      </if>
+      <if=step.warning>
+        <span class="node-warn" title=`Warning: ${step.warning.title}`><ui-icon id="warning"/></span>
+      </if>
+    </span>
+    <span class="node-title">${step.title}</span>
+    <span class="node-phrase">${step.phrase}</span>
+  </a>
+  <if=parts.length>
+    <span class="node-parts">
+      <for|part| of=parts>
+        <a class="badge" data-badge=part.icon href=href
+          title=`${part.count} ${KINDS[part.kind].label.toLowerCase()}${(part.count > 1) ? "s" : ""}: open the Anatomy of ${step.title}`>
+          <kind-icon kind=part.kind/>
+          <if=(part.count > 1)><span class="badge-n">${part.count}</span></if>
+        </a>
+      </for>
+    </span>
+  </if>
+</div>
+
+<style>
+  .node {
+    --g: var(--surface);
+    --gl: var(--line);
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    margin: 0 13px;
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--gl);
+    border-radius: 6px;
+    background: var(--g);
+  }
+  .node[data-group="plan"] { --g: var(--plan); --gl: var(--plan-l); }
+  .node[data-group="build"] { --g: var(--build); --gl: var(--build-l); }
+  .node[data-group="check"] { --g: var(--check); --gl: var(--check-l); }
+  .node[data-group="ship"] { --g: var(--ship); --gl: var(--ship-l); }
+  .node[data-group="learn"] { --g: var(--learn); --gl: var(--learn-l); }
+  .node-link {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.4rem 0.5rem 0.3rem;
+    color: var(--fg);
+    text-decoration: none;
+  }
+  .node-link:hover {
+    color: var(--fg);
+  }
+  .node-link[aria-current] {
+    box-shadow: inset 0 0 0 2px var(--fg);
+    border-radius: 2px;
+  }
+  .node-head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.6875rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .node-num {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 999px;
+    background: var(--gl);
+    color: var(--bg);
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+  .node-human {
+    margin-left: auto;
+    white-space: nowrap;
+    color: var(--fg);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 650;
+  }
+  .node-warn {
+    color: var(--when-bg);
+  }
+  .node-title {
+    font-weight: 700;
+    font-size: 0.875rem;
+    line-height: 1.2;
+  }
+  .node-phrase {
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+  .node-parts {
+    display: flex;
+    gap: 0.35rem;
+    padding: 0 0.5rem 0.4rem;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0 0.3rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--fg);
+    font-size: 0.6875rem;
+    text-decoration: none;
+  }
+  .badge:hover {
+    border-color: var(--fg);
+  }
+</style>

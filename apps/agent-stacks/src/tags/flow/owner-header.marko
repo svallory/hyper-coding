@@ -1,0 +1,33 @@
+import type { Lane } from "../../model/types";
+
+export interface Input {
+  owner: Lane["owners"][number];
+}
+
+<const/owner=input.owner/>
+<div class="owner" data-owner style=`grid-row: 1; grid-column: ${owner.from + 1} / ${owner.to + 2}`>
+  <span class="owner-name">${owner.name}</span>
+  <if=owner.note><span class="owner-note">${owner.note}</span></if>
+</div>
+
+<style>
+  .owner {
+    align-self: end;
+    min-width: 0;
+    margin: 0 13px 0.5rem;
+    padding: 0 0 0.3rem;
+    border-bottom: 2px solid var(--fg);
+  }
+  .owner-name {
+    display: block;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+  }
+  .owner-note {
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+</style>

@@ -15,31 +15,7 @@ export type Input = LaneViewInput;
   </for>
 </if>
 <else-if=view === "flow">
-  <section class="lane" id=lane.id data-lane>
-    <header class="lane-head">
-      <h2 class="lane-name">${lane.name}</h2>
-      <p class="lane-by" data-lane-by>
-        <if=lane.byContent><${lane.byContent}/></if><else>${lane.by}</else>
-        <if=lane.status> · ${lane.status}</if>
-      </p>
-      <if=lane.summary><p class="lane-summary"><${lane.summary}/></p></if>
-      <if=lane.order>
-        <p class="lane-order">
-          <strong>${lane.order.label}</strong> <em>${lane.order.lead}</em>.
-          <${lane.order.content}/>
-        </p>
-      </if>
-    </header>
-    <!-- The graph of the flow is a later unit's; until then the steps are a plain ordered list. -->
-    <ol class="lane-steps">
-      <for|step| of=lane.steps>
-        <li>
-          <a data-step=step.id data-group=step.group href=`#${lane.id}/${step.id}`>${step.title}</a>
-          <span class="step-phrase">${step.phrase}</span>
-        </li>
-      </for>
-    </ol>
-  </section>
+  <lane-flow lane=lane/>
 </else-if>
 <else-if=view === "panels">
   <for|step| of=lane.steps>
@@ -79,31 +55,3 @@ export type Input = LaneViewInput;
     </td>
   </tr>
 </else-if>
-
-<style>
-  .lane {
-    margin-bottom: 2.5rem;
-  }
-  .lane-name {
-    margin: 0;
-  }
-  .step-phrase {
-    margin-left: 0.5rem;
-  }
-  .lane-by,
-  .step-phrase {
-    color: var(--muted);
-    font-size: 0.875rem;
-  }
-  .lane-steps {
-    margin: 0.75rem 0 0;
-    padding-left: 1.5rem;
-  }
-  .lane-steps li {
-    margin: 0 0 0.35rem;
-  }
-  .lane-steps a[aria-current] {
-    color: var(--fg);
-    font-weight: 700;
-  }
-</style>
