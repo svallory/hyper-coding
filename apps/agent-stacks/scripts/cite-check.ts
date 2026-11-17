@@ -49,6 +49,10 @@ export function checkCitations(links: SourceLink[], read: Reader): CheckResult {
 		}
 		const parts = parseLineSpec(link.lines);
 		checked += parts.length;
+		if (kind === "dir") {
+			problems.push(`${where(link)}: a directory cannot cite lines`);
+			continue;
+		}
 		if (kind !== "file") {
 			problems.push(`${where(link)}: missing: no such file`);
 			continue;
@@ -126,13 +130,23 @@ function main(argv: string[]): number {
 		console.error(`cite-check: ${file} is missing; run the build first.`);
 		return 2;
 	}
-	const links = readSourceLinks(readFileSync(file, "utf8")).filter((l) => l.source === sourceId);
+	const all = readSourceLinks(readFileSync(file, "utf8"));
+	const links = all.filter((l) => l.source === sourceId);
+	if (links.length === 0) {
+		const ids = [...new Set(all.map((l) => l.source))].sort();
+		console.error(
+			`cite-check: page ${page} has no source links of source ${sourceId} (it has: ${ids.join(", ") || "none"})`,
+		);
+		return 2;
+	}
 	const read = cloneReader(clone);
 	const result = checkCitations(links, read);
 	for (const problem of result.problems) console.log(problem);
 	console.log(summaryLine(result));
 
-	if (writeManifest) {
+	if (writeManifest && result.problems.length > 0) {
+		console.log("manifest not written: fix the problems above first");
+	} else if (writeManifest) {
 		const path = join(app, "src/content", page, "sources.manifest.json");
 		const manifest: Manifest = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
 		manifest[sourceId] = buildManifestEntries(links, read);
