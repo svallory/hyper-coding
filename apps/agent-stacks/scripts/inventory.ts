@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,11 @@ if (write) {
 	// Only the expected files that exist are refreshed: a page without one is not compared.
 	for (const [page, inventory] of Object.entries(inventories)) {
 		const expected = join(app, "tests/expected", `inventory.${page}.json`);
-		if (existsSync(expected)) writeFileSync(expected, `${JSON.stringify(inventory, null, "\t")}\n`);
+		if (existsSync(expected)) {
+			writeFileSync(expected, `${JSON.stringify(inventory, null, "\t")}\n`);
+			// The repository's formatter keeps short arrays on one line; the commit hook would
+			// apply it anyway, so apply it here and a second --write changes nothing.
+			spawnSync("bunx", ["biome", "format", "--write", expected], { cwd: app, stdio: "ignore" });
+		}
 	}
 }
