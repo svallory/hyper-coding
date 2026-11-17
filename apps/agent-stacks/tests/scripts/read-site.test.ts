@@ -9,6 +9,7 @@ const HTML = `
 <section id=l data-lane>
   <a data-step=a href="#l/a">A</a>
   <a data-connector="a~b" href="#l/a~b">c</a>
+  <a data-connector="b~a" href="#l/b~a">e</a>
   <a data-connector="b~c" data-manual href="#l/b~c">d</a>
 </section>
 <section id="l/a" data-panel=step>

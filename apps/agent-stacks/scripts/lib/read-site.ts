@@ -155,20 +155,24 @@ export function readSite(html: string, page: string): SiteInventory {
 		});
 
 		const connectors = new Map<string, { citations: number; manual: boolean }>();
-		for (const p of own("connector")) {
-			const panelId = attr(p, "id") ?? "";
-			connectors.set(panelId.slice(id.length + 1), {
-				citations: citationCount(links, panelId),
-				manual: p.querySelector('header [data-chip="manual"]') !== null,
-			});
-		}
-		// The connector elements of the flow view name connectors that have no panel.
+		// The flow view lists the connectors in the order the lane file writes them; the panels
+		// then supply the citations and the manual mark.
 		const section = root.querySelector(`[data-lane][id="${id}"]`);
 		for (const c of section?.querySelectorAll("[data-connector]") ?? []) {
 			const cid = attr(c, "data-connector") ?? "";
 			const known = connectors.get(cid) ?? { citations: 0, manual: false };
 			if (c.hasAttribute("data-manual")) known.manual = true;
 			connectors.set(cid, known);
+		}
+		for (const p of own("connector")) {
+			const panelId = attr(p, "id") ?? "";
+			const cid = panelId.slice(id.length + 1);
+			connectors.set(cid, {
+				citations: citationCount(links, panelId),
+				manual:
+					connectors.get(cid)?.manual === true ||
+					p.querySelector('header [data-chip="manual"]') !== null,
+			});
 		}
 
 		return {
