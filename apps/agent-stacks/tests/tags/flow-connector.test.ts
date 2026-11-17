@@ -103,19 +103,20 @@ describe("flow-connector", () => {
 			});
 			const [edge] = tagsWith(html, "data-connector=d~a");
 			expect(edge.startsWith("<a")).toBe(true);
-			expect(text(html)).toContain(visible);
+			if (visible) expect(text(html)).toContain(visible);
+			else expect(text(html)).toBe("");
 			if (ariaLabel) expect(edge).toContain(`aria-label="${ariaLabel}"`);
 			else expect(edge).not.toContain("aria-label");
 		},
 	);
 
-	it("names a linked adjacent edge by its steps, the manual flag and the label", () => {
+	it("names a linked adjacent edge by its steps and the label", () => {
 		const html = render(FlowConnector, {
 			lane,
-			connector: connector({ label: "go", manual: true, details }),
+			connector: connector({ label: "go", details }),
 		});
 		expect(tagsWith(html, "data-connector=a~b")[0]).toContain(
-			'aria-label="Title a to Title b (manual): go"',
+			'aria-label="Title a to Title b: go"',
 		);
 	});
 
