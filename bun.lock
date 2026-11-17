@@ -38,6 +38,7 @@
       "name": "agent-stacks",
       "version": "0.0.0",
       "dependencies": {
+        "@babel/types": "^7.29.0",
         "@fontsource-variable/archivo": "^5.2.0",
         "@fontsource/ibm-plex-mono": "^5.2.0",
         "@marko/compiler": "5.39.62",
