@@ -1,0 +1,44 @@
+import { lineLabel, parseLineSpec, sourceHref } from "../../model/links";
+import type { Kind, Source } from "../../model/types";
+
+export interface Input {
+  /** The stack the file belongs to. */
+  of: Source;
+  kind: Kind;
+  name: string;
+  /** Relative to the source's prefix; a trailing slash names a directory. Without it: no link. */
+  path?: string;
+  /** A line spec: `120`, `150-162`, `120,126`. */
+  line?: string;
+  /** The word the cited line must contain (tree rows). */
+  word?: string;
+  /** prose: a mention in running text; name: a tree row's name; slot: the line-number slot. */
+  variant?: "prose" | "name" | "slot";
+}
+
+<const/variant=input.variant ?? "prose"/>
+<const/asCode=variant === "prose" && (input.kind === "skill" || input.kind === "command")/>
+<const/shown=asCode ? (input.name.startsWith("/") ? input.name : `/${input.name}`) : input.name/>
+
+<if=variant === "slot">
+  <for|part, i| of=(input.line && input.path ? parseLineSpec(input.line) : [])>
+    <if=i>, </if>
+    <a data-ref=input.kind data-source=input.of.id data-path=input.path
+      data-lines=`${part.from === part.to ? part.from : `${part.from}-${part.to}`}` data-slot
+      href=sourceHref(input.of, input.path as string, part)>${lineLabel(part)}</a>
+  </for>
+</if>
+<else-if=input.path>
+  <a data-ref=input.kind data-source=input.of.id data-path=input.path data-lines=input.line
+    data-word=input.word
+    href=sourceHref(input.of, input.path, input.line ? parseLineSpec(input.line)[0] : undefined)>
+    <if=asCode><code>${shown}</code></if>
+    <else><kind-icon kind=input.kind/> <span class="ref-name">${shown}</span></else>
+  </a>
+</else-if>
+<else>
+  <span data-ref=input.kind data-source=input.of.id>
+    <if=asCode><code>${shown}</code></if>
+    <else><kind-icon kind=input.kind/> <span class="ref-name">${shown}</span></else>
+  </span>
+</else>

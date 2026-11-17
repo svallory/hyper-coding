@@ -72,3 +72,14 @@ it("the system-dark rule matches the explicit dark rule", () => {
 		expect(dark[name], name).toBe(value);
 	}
 });
+
+it("kind-icon has no box and an icon size of 16 px or more", () => {
+	const style = readFileSync(
+		new URL("../src/tags/ui/kind-icon.style.css", import.meta.url),
+		"utf8",
+	);
+	expect(style).not.toMatch(/(^|[\s;{])(border|background)[\w-]*\s*:/);
+	const size = /--icon-size\s*:\s*(\d+(?:\.\d+)?)px/.exec(style);
+	expect(size, "--icon-size in px").not.toBeNull();
+	expect(Number(size?.[1])).toBeGreaterThanOrEqual(16);
+});
