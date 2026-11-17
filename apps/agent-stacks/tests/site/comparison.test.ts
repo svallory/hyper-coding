@@ -8,6 +8,8 @@ const root = parse(readFileSync(`${dist}/${PAGES.comparison}`, "utf8"), { commen
 const attr = (el: HTMLElement, name: string) => el.getAttribute(name) ?? "";
 
 describe("the comparison page", () => {
+	// Each test keeps what inventory.test.ts cannot see: lane order, popover wiring and its content
+	// (not the fallback), the manual chip, and the omo warning links.
 	it("has the seven lanes, in the order of the navigation", () => {
 		expect(root.querySelectorAll("[data-lane]").map((l) => attr(l, "id"))).toEqual([
 			"superpowers",
@@ -29,7 +31,10 @@ describe("the comparison page", () => {
 			const pop = box?.querySelector("[popover]");
 			expect(trigger, attr(edge, "data-connector")).toBeTruthy();
 			expect(attr(trigger as HTMLElement, "popovertarget")).toBe(attr(pop as HTMLElement, "id"));
-			expect(pop?.text.trim().length, attr(edge, "data-connector")).toBeGreaterThan(0);
+			const id = attr(edge, "data-connector");
+			expect(pop?.text.trim().length, id).toBeGreaterThan(0);
+			// A connector without a <@when> shows this fallback; the text must come from the content.
+			expect(pop?.text.trim(), id).not.toBe("A person triggers this step by hand.");
 		}
 	});
 
