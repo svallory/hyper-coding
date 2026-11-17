@@ -114,7 +114,11 @@ function main(argv: string[]): number {
 	const args = argv.filter((a) => !a.startsWith("--"));
 	const writeManifest = argv.includes("--write-manifest");
 	const [page, sourceId, clone] = args;
-	if (!page || !(page in PAGES) || !sourceId || !clone) {
+	if (
+		argv.some((a) => a.startsWith("--") && a !== "--write-manifest") ||
+		args.length !== 3 ||
+		!Object.hasOwn(PAGES, page)
+	) {
 		console.error(
 			"usage: bun run cite-check <comparison|playbooks> <source id> <clone path> [--write-manifest]",
 		);
