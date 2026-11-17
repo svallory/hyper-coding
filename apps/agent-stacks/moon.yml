@@ -18,3 +18,11 @@ tasks:
       - '~:build'
     options:
       mergeArgs: replace
+
+  # The site tests read dist/public, so the build comes first; the scripts and the tests are inputs.
+  test:
+    deps:
+      - '~:build'
+    inputs:
+      - 'scripts/**/*'
+      - 'tests/**/*'

@@ -1,0 +1,133 @@
+{
+	"pstack": {
+		"agents/comment-sicko.md": {
+			"lines": 32
+		},
+		"agents/poteto-agent.md": {
+			"lines": 10
+		},
+		"skills/": {
+			"dir": true
+		},
+		"skills/architect/SKILL.md": {
+			"lines": 11
+		},
+		"skills/arena/SKILL.md": {
+			"lines": 48
+		},
+		"skills/benchmark-checklist/SKILL.md": {
+			"lines": 39
+		},
+		"skills/correct/SKILL.md": {
+			"lines": 32
+		},
+		"skills/figure-it-out/SKILL.md": {
+			"lines": 52
+		},
+		"skills/in-your-own-words/SKILL.md": {
+			"lines": 7
+		},
+		"skills/interrogate/SKILL.md": {
+			"lines": 31
+		},
+		"skills/no-comments/SKILL.md": {
+			"lines": 24
+		},
+		"skills/poteto-mode/SKILL.md": {
+			"lines": 110
+		},
+		"skills/poteto-mode/playbooks/": {
+			"dir": true
+		},
+		"skills/poteto-mode/playbooks/babysit.md": {
+			"lines": 10
+		},
+		"skills/poteto-mode/playbooks/bug-fix.md": {
+			"lines": 15
+		},
+		"skills/poteto-mode/playbooks/feature.md": {
+			"lines": 21
+		},
+		"skills/poteto-mode/playbooks/multi-phase-plan.md": {
+			"lines": 11
+		},
+		"skills/poteto-mode/playbooks/opening-a-pr.md": {
+			"lines": 9
+		},
+		"skills/poteto-mode/playbooks/prototype.md": {
+			"lines": 14
+		},
+		"skills/poteto-mode/playbooks/refactoring.md": {
+			"lines": 16
+		},
+		"skills/poteto-mode/playbooks/shipping.md": {
+			"lines": 12
+		},
+		"skills/poteto-mode/references/bugbot-triage.md": {
+			"lines": 142
+		},
+		"skills/poteto-mode/scripts/bootstrap.ts": {
+			"lines": 62
+		},
+		"skills/poteto-mode/scripts/watch-pr/": {
+			"dir": true
+		},
+		"skills/poteto-mode/scripts/watch-pr/cli.ts": {
+			"lines": 223
+		},
+		"skills/poteto-mode/scripts/watch-pr/github.ts": {
+			"lines": 726
+		},
+		"skills/poteto-mode/scripts/watch-pr/policy.ts": {
+			"lines": 842
+		},
+		"skills/poteto-mode/scripts/watch-pr/render.ts": {
+			"lines": 169
+		},
+		"skills/poteto-mode/scripts/watch-pr/watch-pr": {
+			"lines": 6
+		},
+		"skills/poteto-mode/worker.md": {
+			"lines": 11
+		},
+		"skills/principle-model-the-domain/SKILL.md": {
+			"lines": 15
+		},
+		"skills/principle-prove-it-works/SKILL.md": {
+			"lines": 11
+		},
+		"skills/principle-separate-before-serializing-shared-state/SKILL.md": {
+			"lines": 11
+		},
+		"skills/principle-sequence-verifiable-units/SKILL.md": {
+			"lines": 13
+		},
+		"skills/reflect/SKILL.md": {
+			"lines": 17
+		},
+		"skills/show-me-your-work/SKILL.md": {
+			"lines": 82
+		},
+		"skills/show-me-your-work/references/decision-log-template.tsv": {
+			"lines": 1
+		},
+		"skills/show-me-your-work/scripts/log.sh": {
+			"lines": 42
+		},
+		"skills/swarm/SKILL.md": {
+			"lines": 41
+		},
+		"skills/tdd/SKILL.md": {
+			"lines": 42
+		},
+		"skills/technical-writing/SKILL.md": {
+			"lines": 70
+		},
+		"skills/unslop/SKILL.md": {
+			"lines": 40
+		},
+		"skills/why/SKILL.md": {
+			"lines": 9
+		}
+	}
+}

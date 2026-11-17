@@ -1,0 +1,200 @@
+{
+	"page": "comparison",
+	"lanes": [
+		{
+			"id": "pstack",
+			"steps": 9,
+			"connectors": 13,
+			"manualConnectors": 3,
+			"stepList": [
+				{
+					"id": "route-and-restate",
+					"warnings": 0,
+					"rows": [
+						"0 poteto-mode",
+						"1 playbooks",
+						"1 figure-it-out",
+						"1 principle-* skills",
+						"1 show-me-your-work",
+						"2 decision-log-template.tsv",
+						"2 log.sh"
+					],
+					"manualRows": 0,
+					"citations": 8
+				},
+				{
+					"id": "understand-current-state",
+					"warnings": 0,
+					"rows": ["0 feature", "0 bug-fix", "1 why"],
+					"manualRows": 0,
+					"citations": 6
+				},
+				{
+					"id": "design-the-shape",
+					"warnings": 0,
+					"rows": [
+						"0 feature",
+						"1 architect",
+						"2 arena",
+						"1 principle-separate-before-serializing-shared-state",
+						"0 bug-fix",
+						"1 architect",
+						"2 arena",
+						"0 multi-phase-plan",
+						"1 prototype",
+						"1 principle-sequence-verifiable-units",
+						"0 poteto-mode",
+						"1 prototype",
+						"1 interrogate"
+					],
+					"manualRows": 0,
+					"citations": 13
+				},
+				{
+					"id": "delegate-build",
+					"warnings": 0,
+					"rows": [
+						"0 feature",
+						"1 principle-model-the-domain",
+						"1 arena",
+						"1 principle-sequence-verifiable-units",
+						"0 bug-fix",
+						"1 tdd",
+						"1 principle-sequence-verifiable-units",
+						"0 poteto-mode",
+						"1 poteto-agent",
+						"2 worker.md",
+						"2 poteto-mode",
+						"1 swarm"
+					],
+					"manualRows": 0,
+					"citations": 12
+				},
+				{
+					"id": "verify-real-surface",
+					"warnings": 0,
+					"rows": [
+						"0 feature",
+						"1 interrogate",
+						"2 in-your-own-words",
+						"2 arena",
+						"0 bug-fix",
+						"0 poteto-mode",
+						"1 principle-prove-it-works",
+						"1 benchmark-checklist"
+					],
+					"manualRows": 0,
+					"citations": 9
+				},
+				{
+					"id": "open-pr",
+					"warnings": 0,
+					"rows": [
+						"0 opening-a-pr",
+						"0 poteto-mode",
+						"1 no-comments",
+						"2 comment-sicko",
+						"3 why",
+						"2 architect",
+						"1 technical-writing",
+						"2 unslop"
+					],
+					"manualRows": 0,
+					"citations": 9
+				},
+				{
+					"id": "babysit",
+					"warnings": 0,
+					"rows": [
+						"0 babysit",
+						"1 watch-pr",
+						"2 bootstrap.ts",
+						"2 cli.ts",
+						"3 github.ts",
+						"3 policy.ts",
+						"3 render.ts",
+						"1 bugbot-triage.md"
+					],
+					"manualRows": 0,
+					"citations": 10
+				},
+				{
+					"id": "verify-and-land",
+					"warnings": 0,
+					"rows": [
+						"0 shipping",
+						"1 watch-pr",
+						"2 bootstrap.ts",
+						"2 cli.ts",
+						"3 github.ts",
+						"3 policy.ts",
+						"3 render.ts"
+					],
+					"manualRows": 0,
+					"citations": 9
+				},
+				{
+					"id": "learn-and-encode",
+					"warnings": 0,
+					"rows": ["0 reflect", "0 correct"],
+					"manualRows": 0,
+					"citations": 3
+				}
+			],
+			"connectorList": [
+				{
+					"id": "route-and-restate~understand-current-state",
+					"citations": 0
+				},
+				{
+					"id": "understand-current-state~design-the-shape",
+					"citations": 0
+				},
+				{
+					"id": "design-the-shape~delegate-build",
+					"citations": 0
+				},
+				{
+					"id": "delegate-build~verify-real-surface",
+					"citations": 0
+				},
+				{
+					"id": "verify-real-surface~open-pr",
+					"citations": 0
+				},
+				{
+					"id": "open-pr~babysit",
+					"citations": 0
+				},
+				{
+					"id": "babysit~verify-and-land",
+					"citations": 0
+				},
+				{
+					"id": "verify-and-land~learn-and-encode",
+					"citations": 0
+				},
+				{
+					"id": "understand-current-state~understand-current-state",
+					"citations": 0
+				},
+				{
+					"id": "verify-real-surface~delegate-build",
+					"citations": 0
+				},
+				{
+					"id": "babysit~delegate-build",
+					"citations": 0
+				},
+				{
+					"id": "verify-and-land~delegate-build",
+					"citations": 0
+				},
+				{
+					"id": "learn-and-encode~route-and-restate",
+					"citations": 0
+				}
+			]
+		}
+	]
+}
