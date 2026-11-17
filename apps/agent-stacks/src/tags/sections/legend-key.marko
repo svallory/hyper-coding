@@ -1,31 +1,23 @@
 import type { Kind } from "../../model/types";
 
+export interface Item {
+  swatch?: "plan" | "build" | "check" | "ship" | "learn" | "human";
+  icon?: "human" | "warning" | "file" | "code";
+  line?: "solid" | "dashed" | "dotted" | "manual";
+  marker?: "pick";
+  sample?: string;
+  content?: Marko.Body;
+}
+
 export interface Input {
   label: string;
   /** Titled groups of items. */
-  group?: Marko.AttrTag<{
-    title: string;
-    item?: Marko.AttrTag<{
-      swatch?: "plan" | "build" | "check" | "ship" | "learn" | "human";
-      icon?: string;
-      line?: string;
-      marker?: string;
-      sample?: string;
-      content?: Marko.Body;
-    }>;
-  }>;
+  group?: Marko.AttrTag<{ title: string; item?: Marko.AttrTag<Item> }>;
   /** Items outside any group. */
-  item?: Marko.AttrTag<{
-    swatch?: "plan" | "build" | "check" | "ship" | "learn" | "human";
-    icon?: string;
-    line?: string;
-    marker?: string;
-    sample?: string;
-    content?: Marko.Body;
-  }>;
+  item?: Marko.AttrTag<Item>;
 }
 
-static const ICON_KIND: Record<string, Kind> = { file: "reference", code: "script" };
+static const ICON_KIND: Record<"file" | "code", Kind> = { file: "reference", code: "script" };
 
 <const/groups=[
   ...[...(input.group ?? [])].map((g) => ({ title: g.title as string | undefined, items: [...(g.item ?? [])] })),
@@ -52,7 +44,7 @@ static const ICON_KIND: Record<string, Kind> = { file: "reference", code: "scrip
               </i>
             </if>
             <if=it.icon === "warning"><ui-icon id="warning"/></if>
-            <if=it.icon && ICON_KIND[it.icon]><kind-icon kind=ICON_KIND[it.icon]/></if>
+            <if=it.icon === "file" || it.icon === "code"><kind-icon kind=ICON_KIND[it.icon]/></if>
             <if=it.line><i class="key-ln" data-line=it.line></i></if>
             <if=it.line === "manual"><ui-icon id="manual"/></if>
             <if=it.marker === "pick"><i class="key-pick" data-marker="pick"></i></if>
@@ -116,6 +108,7 @@ static const ICON_KIND: Record<string, Kind> = { file: "reference", code: "scrip
     border-left-width: 4px;
   }
   .key-sw-human {
+    border-width: 2px;
     background: var(--surface);
     border-color: var(--fg);
   }

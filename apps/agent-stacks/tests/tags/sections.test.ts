@@ -63,7 +63,7 @@ describe("legend-key", () => {
 		["next step", "data-line=solid"],
 		["feeds the next", "data-line=dashed"],
 		["our inference", "data-line=dotted"],
-		["operator asks", "data-line=manual"],
+		["operator asks", "data-ui-icon=manual"],
 		["a choice", "data-marker=pick"],
 		["name column heading", "key-sample"],
 		["files", "data-icon=file"],
@@ -73,9 +73,6 @@ describe("legend-key", () => {
 	const entries = html.split("data-key-entry").slice(1);
 
 	it("draws every entry with its label and its marker, under the group's title", () => {
-		expect(entries.map((e) => [text(`<span ${e}`.split("</span></span>")[0]), e])).toHaveLength(
-			expected.length,
-		);
 		expect(entries).toHaveLength(expected.length);
 		entries.forEach((e, i) => {
 			const [label, marker] = expected[i];
