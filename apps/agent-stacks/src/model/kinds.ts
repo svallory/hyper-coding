@@ -7,23 +7,23 @@ export interface KindInfo {
 	label: string;
 }
 
-const kind = (icon: IconId, label: string): KindInfo => ({
+const kind = (key: Kind, icon: IconId, label: string): KindInfo => ({
 	icon,
-	token: `--kind-${label.toLowerCase().replace(/\s+/g, "-")}`,
+	token: `--kind-${key}`,
 	label,
 });
 
 /** Every kind, once. Kinds that share an icon share its colour (see tokens.css). */
 export const KINDS: Record<Kind, KindInfo> = {
-	skill: kind("skill", "Skill"),
-	command: kind("skill", "Command"),
-	agent: kind("agent", "Agent"),
-	hook: kind("hook", "Hook"),
-	reference: kind("file", "Reference"),
-	playbook: kind("file", "Playbook"),
-	rule: kind("file", "Rule"),
-	script: kind("code", "Script"),
-	"harness-code": kind("code", "Harness code"),
-	binary: kind("code", "Binary"),
-	tool: kind("code", "Tool"),
+	skill: kind("skill", "skill", "Skill"),
+	command: kind("command", "skill", "Command"),
+	agent: kind("agent", "agent", "Agent"),
+	hook: kind("hook", "hook", "Hook"),
+	reference: kind("reference", "file", "Reference"),
+	playbook: kind("playbook", "file", "Playbook"),
+	rule: kind("rule", "file", "Rule"),
+	script: kind("script", "code", "Script"),
+	"harness-code": kind("harness-code", "code", "Harness code"),
+	binary: kind("binary", "code", "Binary"),
+	tool: kind("tool", "code", "Tool"),
 };

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The pages the build must produce, relative to the output directory. */
-export const REQUIRED_PAGES = ["index.html", "pstack/playbooks/index.html"];
+const REQUIRED_PAGES = ["index.html", "pstack/playbooks/index.html"];
 
 /** Returns the problems of an output directory; an empty list means it is good. */
 export function assertDist(dir: string): string[] {
