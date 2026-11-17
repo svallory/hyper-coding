@@ -1,0 +1,178 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="figure-it-out" name="figure-it-out (the fallback)" source=pstack>
+  <@by><skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/> · a skill, not a playbook</@by>
+  <@summary>
+    "When the task matches no playbook, design one. The deliverable before any code is the workflow itself."
+  </@summary>
+  <@order label="Ends with" lead="a reply and a decision trail">
+    Reply: the playbook you designed, the rigor level and why, the decision-trail path, what is verified against the predicate, and what is still open.
+  </@order>
+
+  <@step id="frame" title="Frame" phrase="Done predicate, scope, rigor level" group="plan" human>
+    <@what>
+      Do not start until you can state: done as a falsifiable predicate; scope in rough units and effort, with blockers; the rigor level, "biased high". "Present the framing and tradeoffs before committing to a long run."
+    </@what>
+    <@actor>Main agent; the human sees the framing</@actor>
+    <@output>Predicate, scope, rigor level</@output>
+    <@gate>"a multi-hour run earns one checkpoint"; reversible work proceeds without waiting</@gate>
+
+    <@row kind="skill" name="figure-it-out" path="skills/figure-it-out/SKILL.md"
+      by="model or human (/figure-it-out)">
+      The five phases.
+    </@row>
+    <@row kind="skill" name="principle-prove-it-works" path="skills/principle-prove-it-works/SKILL.md"
+      by="model; the step cites this principle">
+      Verify on the real artifact, not a proxy.
+    </@row>
+    <@row kind="skill" name="principle-never-block-on-the-human"
+      path="skills/principle-never-block-on-the-human/SKILL.md"
+      by="model; the step cites this principle">
+      Proceed on reversible work.
+    </@row>
+  </@step>
+
+  <@step id="design-workflow" title="Design workflow" phrase="Atomic units, riskiest unknown first"
+    group="plan">
+    <@what>
+      Decompose into independently landable units. One-way-door decisions go to architect; mechanical work skips it. Decide what fans out, each worker in its own worktree or branch. "Write the designed phase list down. That list is what the human reviews."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A written phase list, added to the todo list</@output>
+    <@gate>None in code</@gate>
+
+    <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
+      Designs the shape of a change that crosses a function boundary. It runs arena.
+    </@row>
+    <@row kind="skill" name="arena" path="skills/arena/SKILL.md" by="model, named in this step">
+      Several runners on different models build the same thing; a cross-judge picks.
+    </@row>
+    <@row kind="skill" name="principle-foundational-thinking"
+      path="skills/principle-foundational-thinking/SKILL.md"
+      by="model; the step cites this principle">
+      Scaffold and verification before features.
+    </@row>
+    <@row kind="skill" name="principle-separate-before-serializing-shared-state"
+      path="skills/principle-separate-before-serializing-shared-state/SKILL.md"
+      by="model; the step cites this principle">
+      Split the shared target before serializing writers.
+    </@row>
+    <@row kind="skill" name="principle-laziness-protocol"
+      path="skills/principle-laziness-protocol/SKILL.md" by="model; the step cites this principle">
+      No second arena over a settled design.
+    </@row>
+  </@step>
+
+  <@step id="build-harness" title="Build harness" phrase="Baseline from the pre-change state"
+    group="check">
+    <@what>
+      "Build the verification harness before the work, with the baseline captured from the pre-change state, so the check reads as old value vs new value."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A harness and a baseline</@output>
+  </@step>
+
+  <@step id="run-loop" title="Run loop" phrase="Hypothesis, smallest change, measure, keep or revert"
+    group="build">
+    <@what>
+      "Each unit is an experiment. State the hypothesis, make the smallest change, measure against the predicate on the real artifact, keep it if it advanced, revert it if it didn't."
+    </@what>
+    <@actor>Main agent and workers</@actor>
+    <@output>One unit, kept or reverted</@output>
+
+    <@row kind="skill" name="principle-sequence-verifiable-units"
+      path="skills/principle-sequence-verifiable-units/SKILL.md"
+      by="model; the step cites this principle">
+      Verify each unit before starting the next.
+    </@row>
+    <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" by="main agent, Task tool">
+      Subagent type for any subagent a playbook step spawns. Background, fresh per task.
+    </@row>
+    <@row kind="reference" name="worker.md" path="skills/poteto-mode/worker.md"
+      by="first line of every agent kickoff">
+      Rules every spawned agent reads first: no extra gates, never ask a person, PR format.
+    </@row>
+  </@step>
+
+  <@step id="judge-unit" title="Judge unit" phrase="VERIFIED, NOT VERIFIED or INCONCLUSIVE" group="check">
+    <@what>
+      Verify by inspecting the artifact, never a self-report. Delegated work is paired with a judge. "Inconclusive is not a pass. Don't hide a negative."
+    </@what>
+    <@actor>Main agent or a judge subagent</@actor>
+    <@output>One of three verdicts</@output>
+    <@gate>The verdict, in prompt text</@gate>
+    <@back>
+      Run loop for the next unit; if a worker games the gate, "reset and harden the contract"
+    </@back>
+  </@step>
+
+  <@step id="audit-trail" title="Audit trail" phrase="A row as each step lands" group="learn">
+    <@what>
+      Logged through <skill-ref of=pstack name="show-me-your-work" path="skills/show-me-your-work/SKILL.md"/>, woven through the run, usually committed so the reviewer reads it in the PR.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The decision trail</@output>
+
+    <@row kind="skill" name="show-me-your-work" path="skills/show-me-your-work/SKILL.md"
+      by="model, named in this step">
+      Decision trail: one row per attempt or step.
+    </@row>
+    <@row kind="script" name="log.sh" path="skills/show-me-your-work/scripts/log.sh"
+      by="model, via show-me-your-work">
+      Appends one row to the decision log.
+    </@row>
+  </@step>
+
+  <@step id="verify-whole" title="Verify whole" phrase="Against the Phase A predicate" group="check">
+    <@what>
+      Check the whole on the real product, not just the harness. Encode any recurring correction as a gate, lint rule, check or script.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The final reply</@output>
+    <@gate>The Phase A predicate</@gate>
+
+    <@row kind="skill" name="principle-encode-lessons-in-structure"
+      path="skills/principle-encode-lessons-in-structure/SKILL.md"
+      by="model; the step cites this principle">
+      Turn a repeated instruction into a check.
+    </@row>
+  </@step>
+
+  <@connector from="frame" to="design-workflow"/>
+
+  <@connector from="design-workflow" to="build-harness"/>
+
+  <@connector from="build-harness" to="run-loop"/>
+
+  <@connector from="run-loop" to="judge-unit"/>
+
+  <@connector from="judge-unit" to="audit-trail"/>
+
+  <@connector from="audit-trail" to="verify-whole"/>
+
+  <@connector from="judge-unit" to="run-loop" label="next unit" enforced="prompt">
+    <@when>The unit has a verdict and units remain.</@when>
+    <@by>model</@by>
+    <@how>
+      A kept unit moves on; a unit that did not advance the predicate is reverted first. Each unit is verified before the next starts.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/>, Phase C
+    </@source>
+  </@connector>
+
+  <@connector from="judge-unit" to="design-workflow" label="gate was wrong or gamed" enforced="prompt">
+    <@when>A worker gamed the gate, or the gate itself is wrong.</@when>
+    <@by>model</@by>
+    <@how>
+      "reset and harden the contract". "If the gate itself is wrong, fix the gate in its own change rather than routing around it."
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/>, Phase C
+    </@source>
+  </@connector>
+</lane>

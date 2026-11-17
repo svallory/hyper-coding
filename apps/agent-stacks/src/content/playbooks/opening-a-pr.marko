@@ -1,0 +1,93 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="opening-a-pr" name="Opening a PR" source=pstack>
+  <@by><playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md"/></@by>
+  <@summary>
+    "Invoked at the end of every other playbook." Ends at an open, ready PR. "<playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> does not start a babysit."
+  </@summary>
+  <@order label="Ends with" lead="a ready PR; no babysit">
+    No Reply line. The PR body is the output: Why, What changed, Scope, Tradeoffs, Blast Radius, Verification.
+  </@order>
+
+  <@step id="worktree" title="Worktree" phrase="Off trunk; unrelated work out" group="ship">
+    <@what>"Work from a git worktree off trunk, and keep unrelated work out of it."</@what>
+    <@actor>Main agent</@actor>
+
+    <@row kind="playbook" name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+  </@step>
+
+  <@step id="small-commits" title="Small commits" phrase="Rebase into landable commits" group="ship">
+    <@what>"Rebase into small, landable commits."</@what>
+    <@actor>Main agent</@actor>
+
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+    <@row kind="skill" name="technical-writing" path="skills/technical-writing/SKILL.md"
+      by="model, per poteto-mode Non-negotiables">
+      Commit messages and PR descriptions.
+    </@row>
+  </@step>
+
+  <@step id="deslop" title="Deslop" phrase="Strip slop from the diff" group="check">
+    <@what>
+      "Run <skill-ref of=pstack name="/deslop"/> from cursor-team-kit over the diff before commit." poteto-mode adds: before review, <skill-ref of=pstack name="no-comments" path="skills/no-comments/SKILL.md"/>.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@gate>Prompt text</@gate>
+
+    <@row kind="skill" name="/deslop" gloss="cursor-team-kit plugin (not in pstack)" by="model">
+      Strips slop from the diff before commit.
+    </@row>
+    <@row kind="skill" name="no-comments" path="skills/no-comments/SKILL.md"
+      by="model, per poteto-mode Non-negotiables">
+      Removes comments that restate the code.
+    </@row>
+  </@step>
+
+  <@step id="title-and-body" title="Title and body" phrase="type(scope): subject; under 40 lines"
+    group="ship">
+    <@what>
+      Title names a real symbol when one carries the change. Body: "a one-minute briefing under 40 lines" with these headings in order, empty ones dropped: Why, What changed, Scope, Tradeoffs, Blast Radius, Verification.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@gate>Nothing checks the title or the length</@gate>
+
+    <@row kind="skill" name="unslop" path="skills/unslop/SKILL.md"
+      by="model, per poteto-mode Non-negotiables">
+      Applied to all prose.
+    </@row>
+    <@row kind="skill" name="blast-radius" path="skills/blast-radius/SKILL.md" by="model">
+      Works out what else the change can affect.
+    </@row>
+  </@step>
+
+  <@step id="open-ready" title="Open ready" phrase="Not a draft; stack by base branch" group="ship">
+    <@what>
+      Through the run's PR tool with draft: false, or gh pr create without --draft, or origin pr create --status open. Follow-ups are stacked by base branch.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>An open PR</@output>
+
+    <@row kind="binary" name="gh / origin pr"
+      gloss="GitHub CLI; Origin CLI when it resolves the repository" by="model">
+      Every PR operation. Graphite (gt) is never required.
+    </@row>
+  </@step>
+
+  <@connector from="worktree" to="small-commits"/>
+
+  <@connector from="small-commits" to="deslop"/>
+
+  <@connector from="deslop" to="title-and-body"/>
+
+  <@connector from="title-and-body" to="open-ready"/>
+</lane>

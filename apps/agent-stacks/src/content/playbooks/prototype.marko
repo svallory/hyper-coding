@@ -1,0 +1,120 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="prototype" name="Prototype" source=pstack>
+  <@by><playbook-ref of=pstack name="prototype" path="skills/poteto-mode/playbooks/prototype.md"/></@by>
+  <@summary>
+    "You own the design decision, not the code. The prototype is a throwaway instrument." Speed over polish; no planning, no tests.
+  </@summary>
+  <@order label="Ends with" lead="a decision; the real build follows Feature">
+    Reply: the variants explored, the evidence, tradeoffs, your recommendation, and the scratch path. "Say plainly that the prototype is throwaway."
+  </@order>
+
+  <@step id="scope-decision" title="Scope decision" phrase="No decision means no prototype" group="plan">
+    <@what>
+      Which layout, interaction or density; or for an empirical fork, which behaviour, timing or approach. "No decision means no prototype. Route to Feature."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The decision the prototype exists to make</@output>
+    <@handoff to="feature"/>
+
+    <@row kind="playbook" name="Prototype" path="skills/poteto-mode/playbooks/prototype.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+  </@step>
+
+  <@step id="gather-references" title="Gather references" phrase="Only when the design space is open"
+    group="plan" human>
+    <@what>
+      Search for prior art, summarize a moodboard of themes, palettes and layouts, and let the user pick directions before building.
+    </@what>
+    <@actor>Main agent; the user picks</@actor>
+  </@step>
+
+  <@step id="build-throwaway" title="Build throwaway" phrase="Scratch dir, lightest stack" group="build">
+    <@what>
+      In an isolated scratch directory, separate from production source. Visual: vanilla HTML, CSS and JS with CDN dependencies. Behavioural: the smallest script that exercises the question. "No production framework, no tests, no abstractions."
+    </@what>
+    <@actor>Main agent</@actor>
+  </@step>
+
+  <@step id="one-switcher" title="One switcher" phrase="Variants side by side, labelled" group="build">
+    <@what>
+      When comparing alternatives, build them behind one switcher (buttons or a keypress), each variant labelled.
+    </@what>
+    <@actor>Main agent</@actor>
+
+    <@row kind="skill" name="principle-exhaust-the-design-space"
+      path="skills/principle-exhaust-the-design-space/SKILL.md"
+      by="model; the step cites this principle">
+      Build two or three competing prototypes.
+    </@row>
+  </@step>
+
+  <@step id="observe" title="Observe" phrase="Screenshots or logged timing" group="check">
+    <@what>
+      Visual: screenshot each variant through the control skill and drive the interaction. Behavioural: log the timing, print the output, watch the render. "The observation is the test here, not an assertion."
+    </@what>
+    <@actor>Main agent</@actor>
+
+    <@row kind="skill" name="control-ui / control-cli" gloss="cursor-team-kit plugin (not in pstack)"
+      by="model; \"the matching control skill\"">
+      Drives the real UI or CLI the way a user would.
+    </@row>
+  </@step>
+
+  <@step id="recommend" title="Recommend" phrase="Decision plus the throwaway artifact" group="plan"
+    human>
+    <@what>
+      Present alternatives, tradeoffs and a recommendation. Hand the chosen direction to Feature, or to architect for the shape.
+    </@what>
+    <@actor>Main agent; the human decides</@actor>
+    <@handoff to="feature"/>
+
+    <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
+      Designs the shape of a change that crosses a function boundary. It runs arena.
+    </@row>
+  </@step>
+
+  <@connector from="scope-decision" to="gather-references" pick enforced="prompt">
+    <@when>The design space is open.</@when>
+    <@by>model</@by>
+    <@how>The model decides whether the direction is already set.</@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Prototype" path="skills/poteto-mode/playbooks/prototype.md"/> step 2
+    </@source>
+  </@connector>
+
+  <@connector from="gather-references" to="build-throwaway"/>
+
+  <@connector from="build-throwaway" to="one-switcher"/>
+
+  <@connector from="one-switcher" to="observe"/>
+
+  <@connector from="observe" to="recommend"/>
+
+  <@connector from="scope-decision" to="build-throwaway" label="direction already set" enforced="prompt">
+    <@when>The direction is set.</@when>
+    <@by>model</@by>
+    <@how>"Skip when the direction is set."</@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Prototype" path="skills/poteto-mode/playbooks/prototype.md"/> step 2
+    </@source>
+  </@connector>
+
+  <@connector from="observe" to="build-throwaway" label="throw away, try another" enforced="prompt">
+    <@when>An approach does not answer the question.</@when>
+    <@by>model</@by>
+    <@how>
+      "Propose variations the user didn't ask for, throw an approach away and try another."
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Prototype" path="skills/poteto-mode/playbooks/prototype.md"/> intro
+    </@source>
+  </@connector>
+</lane>

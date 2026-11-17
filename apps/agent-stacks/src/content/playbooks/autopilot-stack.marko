@@ -1,0 +1,80 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="autopilot-stack" name="Autopilot-stack" source=pstack>
+  <@by><playbook-ref of=pstack name="autopilot-stack" path="skills/poteto-mode/playbooks/autopilot-stack.md"/></@by>
+  <@summary>
+    "Run the <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/> playbook, but do not merge."
+  </@summary>
+  <@order label="Ends with" lead="verified, unmerged PRs">
+    Reply: list each PR with its verdict, in place of what merged.
+  </@order>
+
+  <@step id="autopilot-full" title="Autopilot-full" phrase="Same steps, without the merge" group="build">
+    <@what>
+      Operator gates, one owner per PR, code-ready head, swarm-verify and the root audit, as in <playbook-ref of=pstack name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"/>. "Every loop tick prompt names this file, so each tick sees the no-merge rule."
+    </@what>
+    <@actor>Root agent and owners</@actor>
+    <@handoff to="autopilot-full"/>
+
+    <@row kind="playbook" name="Autopilot-stack" path="skills/poteto-mode/playbooks/autopilot-stack.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+    <@row kind="playbook" name="Autopilot-full" path="skills/poteto-mode/playbooks/autopilot-full.md"
+      by="model, named in this step">
+      The steps this playbook reuses.
+    </@row>
+  </@step>
+
+  <@step id="stack-if-dependent" title="Stack if dependent" phrase="Base on the parent PR's branch"
+    group="build">
+    <@what>
+      "Stack a PR only when it builds on another PR." That PR is based on the other PR's branch instead of trunk; each PR rebases onto its parent, and the stack root rebases onto trunk.
+    </@what>
+    <@actor>Each owner</@actor>
+
+    <@row kind="playbook" name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"
+      by="model, named in this step">
+      Stacks follow-ups by base branch.
+    </@row>
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+  </@step>
+
+  <@step id="restack" title="Restack" phrase="A new lower head moves those above" group="build">
+    <@what>
+      "A new head on the lower PR restacks the PRs above it, and a PR whose git patch-id the restack leaves unchanged keeps its verdict."
+    </@what>
+    <@actor>Each owner</@actor>
+    <@gate>patch-id comparison, in prompt text</@gate>
+
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+  </@step>
+
+  <@step id="stop-at-verified" title="Stop at verified" phrase="Green at head; no merge" group="check">
+    <@what>
+      "Stop when each PR is verified and green at its current head, then hand the PRs to the operator."
+    </@what>
+    <@actor>Root agent</@actor>
+  </@step>
+
+  <@step id="hand-to-operator" title="Hand to operator" phrase="Nobody pushes without a go" group="ship"
+    human>
+    <@what>"After the handoff, nobody pushes without the operator's go."</@what>
+    <@actor>The operator</@actor>
+    <@handoff to="shipping"/>
+  </@step>
+
+  <@connector from="autopilot-full" to="stack-if-dependent"/>
+
+  <@connector from="stack-if-dependent" to="restack"/>
+
+  <@connector from="restack" to="stop-at-verified"/>
+
+  <@connector from="stop-at-verified" to="hand-to-operator"/>
+</lane>

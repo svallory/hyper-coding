@@ -1,0 +1,89 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="trace-forensics" name="Trace forensics" source=pstack>
+  <@by><playbook-ref of=pstack name="trace-forensics" path="skills/poteto-mode/playbooks/trace-forensics.md"/></@by>
+  <@summary>
+    "You own the diagnosis from the artifact." The capture already exists: "read it, don't re-run it."
+  </@summary>
+  <@order label="Ends with" lead="a diagnosis; no fix unless asked">
+    Reply: the artifact and format, the reduced finding, the source location, the artifact paths, and whether a paired capture confirmed it. "Route to Bug fix or Perf issue once the cause is known."
+  </@order>
+
+  <@step id="load-artifact" title="Load artifact" phrase="Identify the format; right tool" group="plan">
+    <@what>
+      A DevTools or trace parser for cpuprofile and .json.gz, a text editor for a spindump, heap tooling for a heapsnapshot. Large artifacts are parsed in a subagent.
+    </@what>
+    <@actor>Main agent or a subagent</@actor>
+    <@input>An existing capture</@input>
+
+    <@row kind="playbook" name="Trace forensics" path="skills/poteto-mode/playbooks/trace-forensics.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+    <@row kind="skill" name="principle-guard-the-context-window"
+      path="skills/principle-guard-the-context-window/SKILL.md"
+      by="model; the step cites this principle">
+      Send bulk reading to subagents; keep the summary.
+    </@row>
+    <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" by="main agent, Task tool">
+      Subagent type for any subagent a playbook step spawns. Background, fresh per task.
+    </@row>
+  </@step>
+
+  <@step id="make-queryable" title="Make queryable" phrase="Dump into sqlite, one row each" group="plan">
+    <@what>One row per sample, frame or node. "Reach the queryable shape before you read."</@what>
+    <@actor>Main agent</@actor>
+    <@output>A <binary-ref of=pstack name="sqlite"/> database</@output>
+
+    <@row kind="binary" name="sqlite" gloss="sqlite CLI" by="model, named in this step">
+      Holds the trace or heap snapshot as rows.
+    </@row>
+  </@step>
+
+  <@step id="narrow-cause" title="Narrow cause" phrase="Hot path, retainer chain, stuck thread"
+    group="plan">
+    <@what>
+      Query for the frames that hold the most time and walk the call tree. For a leak, follow the retainer chain to a GC root. For a spindump, find the thread stuck on-CPU or blocked, and its wait reason.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>The reduced finding</@output>
+  </@step>
+
+  <@step id="attribute-source" title="Attribute source" phrase="File, symbol, line from symbols"
+    group="plan">
+    <@what>
+      "A frame with no source mapping is not yet a diagnosis. Resolve the symbols, or say plainly the artifact does not carry them."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A source location</@output>
+  </@step>
+
+  <@step id="confirm-by-diff" title="Confirm by diff" phrase="Paired capture, else a hypothesis"
+    group="check">
+    <@what>
+      With a before and an after capture, diff them to confirm. Without one, "mark the finding as the strongest hypothesis the artifact supports, not a confirmed cause".
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>Confirmed cause, or a labelled hypothesis</@output>
+  </@step>
+
+  <@step id="hand-back" title="Hand back" phrase="Cited diagnosis, no fix" group="plan">
+    <@what>One-line checkpoint: "throughput checkpoint: n/a, read-only forensics".</@what>
+    <@actor>Main agent</@actor>
+    <@output>The reply</@output>
+    <@handoff to="bug-fix"/>
+    <@handoff to="perf-issue"/>
+  </@step>
+
+  <@connector from="load-artifact" to="make-queryable"/>
+
+  <@connector from="make-queryable" to="narrow-cause"/>
+
+  <@connector from="narrow-cause" to="attribute-source"/>
+
+  <@connector from="attribute-source" to="confirm-by-diff"/>
+
+  <@connector from="confirm-by-diff" to="hand-back"/>
+</lane>

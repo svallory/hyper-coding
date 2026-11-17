@@ -1,3 +1,27 @@
+import Router from "./router.marko";
+import FigureItOut from "./figure-it-out.marko";
+import Investigation from "./investigation.marko";
+import RuntimeForensics from "./runtime-forensics.marko";
+import TraceForensics from "./trace-forensics.marko";
+import BugFix from "./bug-fix.marko";
+import Feature from "./feature.marko";
+import Refactoring from "./refactoring.marko";
+import PerfIssue from "./perf-issue.marko";
+import Hillclimb from "./hillclimb.marko";
+import Prototype from "./prototype.marko";
+import VisualParity from "./visual-parity.marko";
+import AuthoringASkill from "./authoring-a-skill.marko";
+import Eval from "./eval.marko";
+import OpeningAPr from "./opening-a-pr.marko";
+import Babysit from "./babysit.marko";
+import Shipping from "./shipping.marko";
+import MultiPhasePlan from "./multi-phase-plan.marko";
+import AutonomousRun from "./autonomous-run.marko";
+import AutopilotFull from "./autopilot-full.marko";
+import AutopilotStack from "./autopilot-stack.marko";
+import SessionPickup from "./session-pickup.marko";
+import PauseSafely from "./pause-safely.marko";
+import WorktreeCleanup from "./worktree-cleanup.marko";
 
 <page-header title="pstack Playbooks">
   <@lede>Every playbook in poteto's pstack, one lane each, plus the entry that picks one and the fallback skill.</@lede>
@@ -20,18 +44,84 @@
   <@item icon="code">programs that run (scripts, CLIs, built-in commands)</@item>
 </legend-key>
 
-<!-- Each group takes its lanes' `view="nav"` as its body; a group with no body renders nothing. -->
 <lane-nav title="Lanes" label="Playbooks">
-  <@group title="Entry"/>
-  <@group title="Understand"/>
-  <@group title="Change code"/>
-  <@group title="Skills"/>
-  <@group title="Pull requests"/>
-  <@group title="Long runs"/>
-  <@group title="Session"/>
+  <@group title="Entry">
+    <Router view="nav"/>
+    <FigureItOut view="nav"/>
+  </@group>
+  <@group title="Understand">
+    <Investigation view="nav"/>
+    <RuntimeForensics view="nav"/>
+    <TraceForensics view="nav"/>
+  </@group>
+  <@group title="Change code">
+    <BugFix view="nav"/>
+    <Feature view="nav"/>
+    <Refactoring view="nav"/>
+    <PerfIssue view="nav"/>
+    <Hillclimb view="nav"/>
+    <Prototype view="nav"/>
+    <VisualParity view="nav"/>
+  </@group>
+  <@group title="Skills">
+    <AuthoringASkill view="nav"/>
+    <Eval view="nav"/>
+  </@group>
+  <@group title="Pull requests">
+    <OpeningAPr view="nav"/>
+    <Babysit view="nav"/>
+    <Shipping view="nav"/>
+  </@group>
+  <@group title="Long runs">
+    <MultiPhasePlan view="nav"/>
+    <AutonomousRun view="nav"/>
+    <AutopilotFull view="nav"/>
+    <AutopilotStack view="nav"/>
+  </@group>
+  <@group title="Session">
+    <SessionPickup view="nav"/>
+    <PauseSafely view="nav"/>
+    <WorktreeCleanup view="nav"/>
+  </@group>
 </lane-nav>
 
-<!-- The lanes go here, under one `<h2>` per navigation group (Entry, Understand, Change code, Skills, Pull requests, Long runs, Session), one `view="flow"` each. -->
+<h2>Entry</h2>
+<Router view="flow"/>
+<FigureItOut view="flow"/>
+
+<h2>Understand</h2>
+<Investigation view="flow"/>
+<RuntimeForensics view="flow"/>
+<TraceForensics view="flow"/>
+
+<h2>Change code</h2>
+<BugFix view="flow"/>
+<Feature view="flow"/>
+<Refactoring view="flow"/>
+<PerfIssue view="flow"/>
+<Hillclimb view="flow"/>
+<Prototype view="flow"/>
+<VisualParity view="flow"/>
+
+<h2>Skills</h2>
+<AuthoringASkill view="flow"/>
+<Eval view="flow"/>
+
+<h2>Pull requests</h2>
+<OpeningAPr view="flow"/>
+<Babysit view="flow"/>
+<Shipping view="flow"/>
+
+<h2>Long runs</h2>
+<MultiPhasePlan view="flow"/>
+<AutonomousRun view="flow"/>
+<AutopilotFull view="flow"/>
+<AutopilotStack view="flow"/>
+
+<h2>Session</h2>
+<SessionPickup view="flow"/>
+<PauseSafely view="flow"/>
+<WorktreeCleanup view="flow"/>
 
 <reading-list id="reading" title="My reading">
   <@item>A playbook is not a skill. It is a plain file of 8 to 25 lines (320 lines for all 22) with no frontmatter, inside the poteto-mode skill folder. The plugin manifest registers only skills/ and agents/, so the harness does not know playbooks exist: no description to match on, no slash command, no hook. The only way in is poteto-mode, which a human must type (disable-model-invocation: true). Its last section tells the model to open one file with an ordinary file read and copy the steps into the todo tool. Subagents never pick one: "The chat that receives /poteto-mode owns the playbook, the todo list, and every Task spawn."</@item>
@@ -43,5 +133,29 @@
   <@item>Worth taking for hyper: a stop predicate that pairs a target with a floor on attempts (Hillclimb); a verdict that covers a patch, checked with git patch-id, not a commit (Shipping); pin the behaviour before moving structure (Refactoring); "No decision means no prototype"; a plan whose every PR has unit, live and perf boxes with the trunk baseline measured first (Multi-phase plan).</@item>
 </reading-list>
 
-<!-- Each lane adds its `view="panels"` inside. -->
-<side-panel/>
+<side-panel>
+  <Router view="panels"/>
+  <FigureItOut view="panels"/>
+  <Investigation view="panels"/>
+  <RuntimeForensics view="panels"/>
+  <TraceForensics view="panels"/>
+  <BugFix view="panels"/>
+  <Feature view="panels"/>
+  <Refactoring view="panels"/>
+  <PerfIssue view="panels"/>
+  <Hillclimb view="panels"/>
+  <Prototype view="panels"/>
+  <VisualParity view="panels"/>
+  <AuthoringASkill view="panels"/>
+  <Eval view="panels"/>
+  <OpeningAPr view="panels"/>
+  <Babysit view="panels"/>
+  <Shipping view="panels"/>
+  <MultiPhasePlan view="panels"/>
+  <AutonomousRun view="panels"/>
+  <AutopilotFull view="panels"/>
+  <AutopilotStack view="panels"/>
+  <SessionPickup view="panels"/>
+  <PauseSafely view="panels"/>
+  <WorktreeCleanup view="panels"/>
+</side-panel>

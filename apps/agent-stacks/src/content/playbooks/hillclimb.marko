@@ -1,0 +1,185 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="hillclimb" name="Hillclimb" source=pstack>
+  <@by><playbook-ref of=pstack name="hillclimb" path="skills/poteto-mode/playbooks/hillclimb.md"/></@by>
+  <@summary>
+    "You own the metric and the experiment's integrity." For sustained improvement of one measurable thing. "One change, one measurement, keep or revert."
+  </@summary>
+  <@order label="Ends with" lead="Opening a PR">
+    Reply: the metric and target, baseline to final with the percent delta, iterations run (kept vs reverted), each accepted fix on one line, the decision.tsv path, and the best idea you would try next.
+  </@order>
+
+  <@step id="fix-metric" title="Fix metric" phrase="Workload, one metric, stop predicate" group="plan">
+    <@what>
+      Trace the target and pick a case that reproduces the complaint. Then one metric, the direction that counts as better, and a stop predicate that "pairs a target with a floor on attempts so a lucky early win can't end the run", for example "at least 50% better than baseline and at least 10 iterations".
+    </@what>
+    <@actor>Main agent; the user's numbers when given</@actor>
+    <@output>Metric, direction, stop predicate</@output>
+    <@back>Itself: "If no case reproduces it, fix the repro instead of hillclimbing"</@back>
+
+    <@row kind="playbook" name="Hillclimb" path="skills/poteto-mode/playbooks/hillclimb.md"
+      by="model, after matching the request to its title">
+      The step list this lane is drawn from.
+    </@row>
+  </@step>
+
+  <@step id="freeze-harness" title="Freeze harness" phrase="Prove sensitivity; baseline and gate"
+    group="check">
+    <@what>
+      Run contrasting workloads and confirm the harness separates them. Vet it with <skill-ref of=pstack name="benchmark-checklist" path="skills/benchmark-checklist/SKILL.md"/>; make it print its error count and a count of work done. Once frozen, one command emits the metric as a median of N. Record the baseline and a green run of the regression gate.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A frozen harness, a baseline, a green gate</@output>
+    <@back>
+      Itself: if the harness cannot distinguish the cases, revise the workload or metric
+    </@back>
+
+    <@row kind="skill" name="benchmark-checklist" path="skills/benchmark-checklist/SKILL.md"
+      by="model, named in this step">
+      Checks a measured number before it is trusted.
+    </@row>
+    <@row kind="skill" name="principle-build-the-lever" path="skills/principle-build-the-lever/SKILL.md"
+      by="model; the step cites this principle">
+      Build the tool that proves it.
+    </@row>
+  </@step>
+
+  <@step id="open-log" title="Open log" phrase="decision.tsv, one row per attempt" group="learn">
+    <@what>
+      Columns: id, hypothesis, change, before, after, delta, tests, verdict (kept or reverted), note. "Read it before each attempt. Keep it out of the tree (gitignored)."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>decision.tsv</@output>
+
+    <@row kind="skill" name="show-me-your-work" path="skills/show-me-your-work/SKILL.md"
+      by="model, named in this step">
+      Decision trail: one row per attempt or step.
+    </@row>
+    <@row kind="script" name="log.sh" path="skills/show-me-your-work/scripts/log.sh"
+      by="model, via show-me-your-work">
+      Appends one row to the decision log.
+    </@row>
+    <@row kind="reference" name="decision-log-template.tsv"
+      path="skills/show-me-your-work/references/decision-log-template.tsv"
+      by="model, via show-me-your-work">
+      <skill-ref of=pstack name="show-me-your-work" path="skills/show-me-your-work/SKILL.md"/>'s own header has six columns. <playbook-ref of=pstack name="Hillclimb" path="skills/poteto-mode/playbooks/hillclimb.md"/> names nine of its own, so the model writes that header itself.
+    </@row>
+  </@step>
+
+  <@step id="form-hypothesis" title="Form hypothesis" phrase="Names a specific mechanism" group="plan">
+    <@what>
+      "defer X off the boot path because it blocks first paint", not "try memoizing something". For a perf metric, ordered by the Perf issue mantras.
+    </@what>
+    <@actor>Main agent</@actor>
+  </@step>
+
+  <@step id="one-change" title="One change" phrase="Subagent makes one scoped change" group="build">
+    <@what>
+      A subagent on the configured hillclimb model. Several independent hypotheses fan out to parallel subagents, each in its own worktree.
+    </@what>
+    <@actor>
+      Main agent leads; a <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/> subagent writes
+    </@actor>
+
+    <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" by="main agent, Task tool">
+      Subagent type for any subagent a playbook step spawns. Background, fresh per task.
+    </@row>
+    <@row kind="reference" name="worker.md" path="skills/poteto-mode/worker.md"
+      by="first line of every agent kickoff">
+      Rules every spawned agent reads first: no extra gates, never ask a person, PR format.
+    </@row>
+    <@row kind="rule" name="pstack-models.mdc" gloss="~/.cursor/rules/pstack-models.mdc"
+      by="written by /setup-pstack; read by the model">
+      Per-role model lines. Each code playbook reads its own line.
+    </@row>
+    <@row kind="skill" name="principle-separate-before-serializing-shared-state"
+      path="skills/principle-separate-before-serializing-shared-state/SKILL.md"
+      by="model; the step cites this principle">
+      Split the shared target before serializing writers.
+    </@row>
+    <@row kind="skill" name="principle-guard-the-context-window"
+      path="skills/principle-guard-the-context-window/SKILL.md"
+      by="model; the step cites this principle">
+      Send bulk reading to subagents; keep the summary.
+    </@row>
+  </@step>
+
+  <@step id="measure" title="Measure" phrase="Frozen harness plus regression gate" group="check">
+    <@what>Measure before and after with the frozen harness, and run the regression gate.</@what>
+    <@actor>Main agent</@actor>
+    <@output>before, after, delta, tests</@output>
+  </@step>
+
+  <@step id="keep-or-revert" title="Keep or revert" phrase="Past noise and gate green" group="check">
+    <@what>
+      "Accept only when the metric moves past noise and the gate stays green. Otherwise revert the change in full." One commit per accepted fix, staging only the changed files ("git add &lt;files>, never -A"). The row is logged either way.
+    </@what>
+    <@actor>Main agent</@actor>
+    <@output>A commit or a revert, and a log row</@output>
+    <@gate>Noise and the regression gate, judged by the model from the harness output</@gate>
+
+    <@row kind="binary" name="git" gloss="git CLI" by="model">
+      Worktrees, rebase, patch-id, push.
+    </@row>
+    <@row kind="script" name="log.sh" path="skills/show-me-your-work/scripts/log.sh"
+      by="model, via show-me-your-work">
+      Appends one row to the decision log.
+    </@row>
+    <@row kind="skill" name="principle-sequence-verifiable-units"
+      path="skills/principle-sequence-verifiable-units/SKILL.md"
+      by="model; the step cites this principle">
+      Verify each unit before starting the next.
+    </@row>
+  </@step>
+
+  <@step id="stop-check" title="Stop check" phrase="Predicate met, or ideas marginal" group="check">
+    <@what>
+      "Don't relax the predicate to meet it, and don't quit while cheap untried hypotheses remain. If you are stuck, surface it instead of spinning."
+    </@what>
+    <@actor>Main agent</@actor>
+    <@gate>The step 1 predicate (prompt text; nothing counts the iterations)</@gate>
+  </@step>
+
+  <@step id="opening-a-pr" title="Opening a PR" phrase="Run the shared PR playbook" group="ship">
+    <@what>"Run Opening a PR." The accepted commits are stacked in the order they landed.</@what>
+    <@actor>Main agent</@actor>
+    <@output>A ready (not draft) PR</@output>
+    <@gate>None in code</@gate>
+    <@handoff to="opening-a-pr"/>
+
+    <@row kind="playbook" name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"
+      by="model; last step of this playbook">
+      The shared closing playbook.
+    </@row>
+  </@step>
+
+  <@connector from="fix-metric" to="freeze-harness"/>
+
+  <@connector from="freeze-harness" to="open-log"/>
+
+  <@connector from="open-log" to="form-hypothesis"/>
+
+  <@connector from="form-hypothesis" to="one-change"/>
+
+  <@connector from="one-change" to="measure"/>
+
+  <@connector from="measure" to="keep-or-revert"/>
+
+  <@connector from="keep-or-revert" to="stop-check"/>
+
+  <@connector from="stop-check" to="opening-a-pr"/>
+
+  <@connector from="stop-check" to="form-hypothesis" label="predicate not met" enforced="prompt">
+    <@when>The stop predicate is not met and ideas remain.</@when>
+    <@by>model</@by>
+    <@how>
+      "Push past the first plateau. On a stall, several rejects in a row, pivot category, combine near-misses, re-read the source, or try something more radical before concluding the hill is climbed."
+    </@how>
+    <@bound>the predicate's own attempt floor; no ceiling</@bound>
+    <@source>
+      <playbook-ref of=pstack name="Hillclimb" path="skills/poteto-mode/playbooks/hillclimb.md"/> steps 5-7
+    </@source>
+  </@connector>
+</lane>
