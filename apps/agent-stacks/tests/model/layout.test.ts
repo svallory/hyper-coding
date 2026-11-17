@@ -69,8 +69,9 @@ describe("packLanes", () => {
 		expect(packLanes(spans)).toEqual({ lanes: [0, 0, 1, 2, 3], count: 4 });
 	});
 
-	it.each<[string, [number, number][], number[]]>([
-		["no arc", [], []],
+	type Pairs = [number, number][];
+	const cases: [string, Pairs, number[], number][] = [
+		["no arc", [], [], 0],
 		[
 			"arcs that do not overlap share lane 0",
 			[
@@ -79,6 +80,7 @@ describe("packLanes", () => {
 				[5, 6],
 			],
 			[0, 0, 0],
+			1,
 		],
 		[
 			"arcs that share a column take different lanes",
@@ -87,6 +89,7 @@ describe("packLanes", () => {
 				[2, 4],
 			],
 			[0, 1],
+			2,
 		],
 		[
 			"the shorter arc takes lane 0 whatever the order",
@@ -95,6 +98,7 @@ describe("packLanes", () => {
 				[1, 2],
 			],
 			[1, 0],
+			2,
 		],
 		[
 			"three nested arcs",
@@ -104,11 +108,13 @@ describe("packLanes", () => {
 				[2, 4],
 			],
 			[2, 1, 0],
+			3,
 		],
-	])("%s", (_name, pairs, lanes) => {
+	];
+	it.each(cases)("%s", (_name, pairs, lanes, count) => {
 		const packed = packLanes(pairs.map(([lo, hi]) => ({ lo, hi })));
 		expect(packed.lanes).toEqual(lanes);
-		expect(packed.count).toBe(lanes.length ? Math.max(...lanes) + 1 : 0);
+		expect(packed.count).toBe(count);
 	});
 });
 
@@ -123,18 +129,19 @@ describe("assignSlots", () => {
 		]);
 	});
 
-	it("leaves no two arcs on one anchor, across the pstack lane", () => {
-		const { connectors } = layoutLane(PSTACK.map(asConnector));
-		const anchors = connectors
-			.filter((c) => c.shape === "above" || c.shape === "below")
-			.flatMap((c) => {
-				const way = c.to > c.from ? 1 : -1;
-				return [
-					`${c.from}:${c.shape}:${way}:${c.slotFrom}`,
-					`${c.to}:${c.shape}:${-way}:${c.slotTo}`,
-				];
-			});
-		expect(new Set(anchors).size).toBe(anchors.length);
+	it("gives an arc that leaves a node and one that arrives there distinct slots, past a self loop", () => {
+		const slots = assignSlots([
+			{ from: 2, to: 0, shape: "below", lane: 1 },
+			{ from: 4, to: 2, shape: "below", lane: 0 },
+			{ from: 3, to: 3, shape: "self", lane: 0 },
+			{ from: 5, to: 3, shape: "below", lane: 0 },
+		]);
+		expect(slots).toEqual([
+			{ slotFrom: 0, slotTo: 0 },
+			{ slotFrom: 0, slotTo: 0 },
+			{ slotFrom: 0, slotTo: 0 },
+			{ slotFrom: 0, slotTo: 1 },
+		]);
 	});
 
 	it("uses no slot for adjacent and self connectors", () => {
@@ -166,6 +173,6 @@ describe("layoutLane", () => {
 		const a = layoutLane(input);
 		expect(layoutLane(input)).toEqual(a);
 		expect(JSON.stringify(input)).toBe(before);
-		expect(a).toMatchObject({ above: 0, below: 4, aboveHeight: 0, belowHeight: 114 });
+		expect(a).toMatchObject({ aboveHeight: 0, belowHeight: 114 });
 	});
 });

@@ -58,16 +58,30 @@ describe("flow-connector", () => {
 			expect(html).not.toContain(hook);
 	});
 
-	it("renders a manual connector with details as a link, with its marker and explanation", () => {
+	it("renders a manual connector without details as an element with the marker and the fallback sentence", () => {
+		const html = render(FlowConnector, { lane, connector: connector({ manual: true }) });
+		const [edge] = tagsWith(html, "data-connector=a~b");
+		expect(edge).toContain("data-manual");
+		expect(edge.startsWith("<div")).toBe(true);
+		expect(html).toContain("data-manual-marker");
+		expect(text(html)).toContain("A person triggers this step by hand.");
+	});
+
+	it("renders a manual connector with details as a link to its panel and the details as the explanation", () => {
 		const html = render(Manual, { view: "flow" });
 		const [edge, ...rest] = tagsWith(html, "data-connector=a~b");
 		expect(rest).toEqual([]);
-		expect(edge).toContain("data-manual");
-		expect(edge).toContain("href=#demo/a~b");
 		expect(edge.startsWith("<a")).toBe(true);
-		expect(html).toContain("data-manual-marker");
+		expect(edge).toContain("href=#demo/a~b");
 		expect(text(html)).toContain("The operator says go.");
-		expect(tagsWith(html, "data-human-marker")).toHaveLength(1);
+	});
+
+	it("renders an arc without a label with no invented words", () => {
+		const html = render(FlowConnector, {
+			lane,
+			connector: connector({ from: 3, to: 0, shape: "below" }),
+		});
+		expect(text(html)).toBe("");
 	});
 
 	it("renders an inferred outer back edge as an arc labelled in visible text, with both hooks", () => {
@@ -97,5 +111,11 @@ describe("step-node", () => {
 		expect(link.startsWith("<a")).toBe(true);
 		expect(link).toContain("href=#demo/c");
 		expect(text(html)).toContain("Title c");
+	});
+
+	it("marks a step a human decides", () => {
+		const human = step("h", 1, { human: true });
+		expect(tagsWith(render(StepNode, { lane, step: human }), "data-human-marker")).toHaveLength(1);
+		expect(render(StepNode, { lane, step: lane.steps[0] })).not.toContain("data-human-marker");
 	});
 });

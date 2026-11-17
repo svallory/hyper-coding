@@ -35,7 +35,7 @@ static function badges(rows: Row[]): { icon: string; kind: Kind; count: number }
 <const/step=input.step/>
 <const/href=`#${lane.id}/${step.id}`/>
 <const/parts=badges(step.rows)/>
-<div class="node" data-node data-group=step.group data-human=step.human style=`grid-row: 3; grid-column: ${step.index + 1}`>
+<div class="node" data-group=step.group style=`grid-row: 3; grid-column: ${step.index + 1}`>
   <a class="node-link" data-step=step.id data-group=step.group href=href>
     <span class="node-head">
       <span class="node-num">${step.index + 1}</span>
@@ -53,8 +53,8 @@ static function badges(rows: Row[]): { icon: string; kind: Kind; count: number }
   <if=parts.length>
     <span class="node-parts">
       <for|part| of=parts>
-        <a class="badge" data-badge=part.icon href=href
-          title=`${part.count} ${KINDS[part.kind].label.toLowerCase()}${(part.count > 1) ? "s" : ""}: open the Anatomy of ${step.title}`>
+        <a class="badge" href=href
+          title=`${part.count} ${KINDS[part.kind].label.toLowerCase()}${(part.count > 1) ? "s" : ""}: open ${step.title}`>
           <kind-icon kind=part.kind/>
           <if=(part.count > 1)><span class="badge-n">${part.count}</span></if>
         </a>

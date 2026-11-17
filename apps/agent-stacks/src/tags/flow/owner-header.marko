@@ -5,7 +5,7 @@ export interface Input {
 }
 
 <const/owner=input.owner/>
-<div class="owner" data-owner style=`grid-row: 1; grid-column: ${owner.from + 1} / ${owner.to + 2}`>
+<div class="owner" style=`grid-row: 1; grid-column: ${owner.from + 1} / ${owner.to + 2}`>
   <span class="owner-name">${owner.name}</span>
   <if=owner.note><span class="owner-note">${owner.note}</span></if>
 </div>

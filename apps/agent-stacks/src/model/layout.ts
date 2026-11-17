@@ -69,13 +69,19 @@ export interface Slots {
 /**
  * Anchor slots: arcs that meet at one node on the same side, leaving the same way, take distinct
  * slots (0 is nearest the centre). The deepest lane takes the nearest slot, so a shallower arc
- * never crosses a deeper one. Adjacent and self connectors use no slot.
+ * never crosses a deeper one. Adjacent and self connectors use no slot, but a self loop hangs below
+ * its node, so the arcs there start past its legs (slot 1 on both sides).
  */
 export function assignSlots(
 	edges: { from: number; to: number; shape: Shape; lane: number }[],
 ): Slots[] {
 	const slots: Slots[] = edges.map(() => ({ slotFrom: 0, slotTo: 0 }));
 	const taken = new Map<string, number>();
+	for (const e of edges) {
+		if (e.shape !== "self") continue;
+		taken.set(`${e.from}:below:1`, 1);
+		taken.set(`${e.from}:below:-1`, 1);
+	}
 	const next = (node: number, side: string, dir: number): number => {
 		const key = `${node}:${side}:${dir}`;
 		const n = taken.get(key) ?? 0;
@@ -95,10 +101,7 @@ export function assignSlots(
 
 export interface Layout {
 	connectors: Connector[];
-	/** Lanes of arcs above and below the nodes; a self loop sits below. */
-	above: number;
-	below: number;
-	/** Band heights in px. */
+	/** Band heights in px; a self loop sits in the band below. */
 	aboveHeight: number;
 	belowHeight: number;
 }
@@ -130,7 +133,6 @@ export function layoutLane(connectors: Connector[]): Layout {
 	);
 	return {
 		connectors: connectors.map((c, i) => ({ ...c, shape: shapes[i], lane: lane[i], ...slots[i] })),
-		...counts,
 		aboveHeight: bandHeight(counts.above),
 		belowHeight: bandHeight(counts.below),
 	};

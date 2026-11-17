@@ -23,7 +23,7 @@ export interface Input {
     </if>
   </header>
   <div class="flow-scroll">
-    <div class="graph" data-graph style=`--cols: ${lane.steps.length}; --band-above: ${laid.aboveHeight}px; --band-below: ${laid.belowHeight}px`>
+    <div class="graph" style=`--cols: ${lane.steps.length}; --band-above: ${laid.aboveHeight}px; --band-below: ${laid.belowHeight}px`>
       <for|owner| of=lane.owners>
         <owner-header owner=owner/>
       </for>
