@@ -70,8 +70,18 @@ describe("the comparison page", () => {
 	it("lists under 'Leaves to' only the connectors with a label or details, as v13 does", () => {
 		const step = (id: string) =>
 			root.querySelector(`[data-panel='step'][id='${id}']`) as HTMLElement;
-		// Labelled connectors: the section is there.
-		expect(step("superpowers/implement-task").querySelector("[data-leaves]")).not.toBeNull();
+		// A mixed step: two connectors leave it, only the labelled one is listed.
+		const ends = new Set(
+			root
+				.querySelectorAll("#hyper [data-connector^='build~']")
+				.map((c) => attr(c, "data-connector")),
+		);
+		expect(ends.size).toBe(2);
+		expect(
+			step("hyper/build")
+				.querySelectorAll("[data-leaves] > li")
+				.map((li) => li.querySelector("b")?.text.trim()),
+		).toEqual(["Baseline · fact wrong"]);
 		// A connector leaves this step, but it has neither label nor details: no section, no heading.
 		const bare = step("hyper/define");
 		expect(root.querySelectorAll("#hyper [data-connector^='define~']").length).toBeGreaterThan(0);
