@@ -80,6 +80,13 @@ export interface Input {
     border-radius: 3px;
     animation: row-hit 1.5s ease-out;
   }
+  @media (prefers-reduced-motion: reduce) {
+    .tree-item > details.is-hit > summary,
+    .tree-item > div[data-row].is-hit {
+      animation: none;
+      background-color: color-mix(in srgb, var(--accent) 28%, transparent);
+    }
+  }
   .row-note {
     margin: 0.2rem 0 0 3.6ch;
     font-size: 0.8125rem;

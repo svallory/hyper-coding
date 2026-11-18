@@ -96,11 +96,10 @@ static function parts(rows: Row[], base: string): Part[] {
   // One badge list is open at a time. Without script the badge and each item are links to the step's panel.
   // The state is shared by every step on the page: one list at a time, one click and one key listener.
   // Leaving the badge or the list waits a short grace delay, then fades the list out; coming back cancels.
-  type Shared = { open: HTMLElement | null; pinned: boolean; bound: boolean; grace: number; fade: number };
+  type Shared = { open: HTMLElement | null; pinned: boolean; bound: boolean; grace: number; fade: number; mute: boolean };
   const GRACE_MS = 150;
-  const FADE_MS = 300;
   const w = window as unknown as { __badgeList?: Shared };
-  const g: Shared = (w.__badgeList ??= { open: null, pinned: false, bound: false, grace: 0, fade: 0 });
+  const g: Shared = (w.__badgeList ??= { open: null, pinned: false, bound: false, grace: 0, fade: 0, mute: false });
   const popOf = (badge: Element) => document.getElementById(badge.getAttribute("aria-describedby") ?? "");
   const cancelClose = () => {
     clearTimeout(g.grace);
@@ -129,10 +128,13 @@ static function parts(rows: Row[], base: string): Part[] {
     const open = g.open;
     if (!open) return;
     g.grace = window.setTimeout(() => {
-      popOf(open)?.classList.add("is-closing");
+      const pop = popOf(open);
+      pop?.classList.add("is-closing");
+      // The fade's length is the CSS transition's (none under reduced motion).
+      const fadeMs = pop ? parseFloat(getComputedStyle(pop).transitionDuration) * 1000 || 0 : 0;
       g.fade = window.setTimeout(() => {
         if (g.open === open) hide();
-      }, FADE_MS);
+      }, fadeMs);
     }, GRACE_MS);
   };
   const badgeAt = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>(".badge") ?? null;
@@ -154,7 +156,7 @@ static function parts(rows: Row[], base: string): Part[] {
   });
   node().addEventListener("focusin", (e) => {
     const b = badgeAt(e.target);
-    if (b && !g.pinned) show(b);
+    if (b && !g.pinned && !g.mute) show(b);
   });
   node().addEventListener("focusout", (e) => {
     const to = (e as FocusEvent).relatedTarget as Node | null;
@@ -191,7 +193,15 @@ static function parts(rows: Row[], base: string): Part[] {
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || !g.open) return;
       e.stopImmediatePropagation();
+      // Hiding the list under the focused item would drop focus to the body: hand it to the badge.
+      const badge = g.open;
+      const inside = !!popOf(badge)?.contains(document.activeElement);
       hide();
+      if (inside) {
+        g.mute = true;
+        badge.focus({ preventScroll: true });
+        g.mute = false;
+      }
     }, true);
   }
 </script>
@@ -349,6 +359,11 @@ static function parts(rows: Row[], base: string): Part[] {
   /* The grace delay is over: the list fades out, and coming back over it or its badge cancels the close. */
   .badge-pop.is-closing {
     opacity: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .badge-pop {
+      transition: none;
+    }
   }
   /* Bridges the gap to the badge, so the pointer stays over the list on its way in. */
   .badge-pop::before {
