@@ -1,3 +1,6 @@
+import Button from "../../components/ui/button/button.marko";
+import Kbd from "../../components/ui/kbd/kbd.marko";
+
 export interface Input {
   /** The panels. Each shows when it is the one pointed at or pinned (or, with no script, the page's target). */
   content?: Marko.Body;
@@ -10,7 +13,7 @@ export interface Input {
   <div class="side-in">
     <div class="side-h">
       <small class="side-k">Details</small>
-      <a class="side-close" href="#side" role="button" aria-label="Close details panel">Close</a>
+      <Button class="side-close" variant="outline" size="sm" href="#side" role="button" aria-label="Close details panel">Close <Kbd>esc</Kbd></Button>
     </div>
     <div class="side-pop"><${input.content}/></div>
   </div>
@@ -74,7 +77,7 @@ export interface Input {
     aside.toggleAttribute("data-open", !!shown);
     aside.toggleAttribute("data-pinned", !!pinned);
     (aside as HTMLElement & { inert: boolean }).inert = !shown;
-    label.textContent = pinned ? "Pinned. Click it again to release." : "Following the pointer. Click to pin.";
+    label.textContent = pinned ? "Pinned. Unselect node to release." : "Following the pointer. Click to pin.";
     // Only the links that open panels carry aria-current; the top bar's scroll spy owns its own.
     const want = pinned ? `#${pinned}` : null;
     for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>("a[data-step], a[data-connector]"))) {
@@ -93,6 +96,16 @@ export interface Input {
   const release = () => {
     pinned = null;
     addressFor(null);
+  };
+  // A click that lets go of the pinned item: anywhere outside the panel and outside the pinned node itself.
+  const outsideRelease = (node: EventTarget | null): boolean => {
+    const el = node as Element | null;
+    if (!el?.closest || aside.contains(el)) return false;
+    for (const a of Array.from(document.querySelectorAll(`a[href="#${CSS.escape(pinned ?? "")}"]`))) {
+      if (aside.contains(a)) continue;
+      if (a.contains(el) || a.closest(".node")?.contains(el)) return false;
+    }
+    return true;
   };
   const peek = (panel: HTMLElement, tab?: string) => {
     if (pinned || dismissed) return;
@@ -140,7 +153,14 @@ export interface Input {
       return;
     }
     const t = targetOf(e.target);
-    if (!t) return;
+    if (!t) {
+      if (pinned && !outsideRelease(e.target)) return;
+      if (pinned) {
+        release();
+        render();
+      }
+      return;
+    }
     e.preventDefault();
     // A link inside the panel (a hand-off) pins its step without releasing it.
     if (aside.contains(t.link)) {
@@ -354,19 +374,20 @@ export interface Input {
     font-size: 0.8125rem;
   }
   .side-panel[data-pinned] .side-k {
-    color: var(--accent);
-    font-weight: 600;
+    color: var(--fg);
+    font-weight: 700;
   }
   .side-close {
     flex: none;
-    padding: 0.2rem 0.7rem;
+    height: 28px;
+    padding: 0 0.7rem;
+    border-radius: 6px;
     font-size: 0.8125rem;
     color: var(--fg);
     text-decoration: none;
-    border: 1px solid var(--edge);
-    border-radius: 6px;
   }
   .side-close:hover {
+    color: var(--fg);
     border-color: var(--fg);
     background: var(--sunk);
   }

@@ -1,6 +1,7 @@
 {
 	"include": ["src/**/*", ".marko-run/*", "scripts/**/*", "tests/**/*"],
 	"compilerOptions": {
+		"allowImportingTsExtensions": true,
 		"allowSyntheticDefaultImports": true,
 		"lib": ["dom", "ESNext"],
 		"module": "ESNext",
