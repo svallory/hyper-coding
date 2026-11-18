@@ -4,6 +4,8 @@ export interface Input {
   rows: Row[];
   /** The stack the rows' files belong to; without it the rows are not linked. */
   of?: Source;
+  /** Gives each row an id, `<id>:row:<index path>`, for the links in a step card's badge lists. */
+  idBase?: string;
 }
 
 static const KEY: { kind: Kind; label: string }[] = [
@@ -16,8 +18,8 @@ static const KEY: { kind: Kind; label: string }[] = [
 
 <if=input.rows.length>
   <ul class="tree">
-    <for|row| of=input.rows>
-      <tree-row row=row of=input.of/>
+    <for|row, i| of=input.rows>
+      <tree-row row=row of=input.of rid=(input.idBase === undefined ? undefined : `${input.idBase}:row:${i}`)/>
     </for>
   </ul>
   <p class="tree-key" data-tree-key>

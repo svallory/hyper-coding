@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Connector, Lane, Step } from "../../src/model/types";
 import FlowConnector from "../../src/tags/flow/flow-connector.marko";
 import StepNode from "../../src/tags/flow/step-node.marko";
+import KindIcon from "../../src/tags/ui/kind-icon.marko";
 import Manual from "../fixtures/lane-manual.marko";
 import Ok from "../fixtures/lane-ok.marko";
 
@@ -184,5 +185,24 @@ describe("step-node", () => {
 		expect(html).toMatch(/badge-pop-name>alpha</);
 		expect(html).toMatch(/badge-pop-name>run\.sh</);
 		expect(html).toContain("badge-pop-man");
+		// Each item is a link to the step (the no-script fallback) that names its row in the tree.
+		const items = tagsWith(html, "badge-pop-item");
+		expect(items).toHaveLength(2);
+		for (const i of items) expect(i).toContain("href=#demo/first");
+		expect(items[0]).toMatch(/data-row=demo\/first:row:\d/);
+		// A badge opens the panel on its Anatomy tab.
+		for (const b of badges) expect(b).toContain("data-open-tab=anatomy");
+	});
+
+	it("draws a skill as a book and a hook as a shell prompt, not the old bolt and hook", () => {
+		const icon = (kind: string) => (KindIcon as unknown as Tag).render({ kind }).toString();
+		const skill = icon("skill");
+		expect(icon("command")).toBe(skill.replace("--kind-skill", "--kind-command"));
+		expect(skill).not.toContain("M13 2");
+		expect(skill).toContain("M5 4.5A2.5 2.5 0 0 1 7.5 2H19v15");
+		const hook = icon("hook");
+		expect(hook).toContain("<rect");
+		expect(hook).toContain("m7.5 9 3.5 3-3.5 3M13 16h3.5");
+		expect(hook).not.toContain("a4 4 0 1 1");
 	});
 });

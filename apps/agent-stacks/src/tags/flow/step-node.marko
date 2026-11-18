@@ -13,32 +13,36 @@ static const BADGES = {
   code: { title: "Tools and Hooks", icon: "script" as Kind, kinds: ["script", "binary", "harness-code", "hook", "tool"] },
 } as const;
 
-static interface Part { kind: Kind; name: string; count: number; manual: boolean }
+static interface Part { kind: Kind; name: string; count: number; manual: boolean; rid: string }
 
-/** The parts a step's tree names, once each by kind and path, nested rows included, in tree order. */
-static function parts(rows: Row[]): Part[] {
+/**
+ * The parts a step's tree names, once each by kind and path, nested rows included, in tree order.
+ * `rid` is the id of the part's first row in the Anatomy tree, built as `anatomy-tree` and `tree-row` build it.
+ */
+static function parts(rows: Row[], base: string): Part[] {
   const seen = new Set<string>();
   const out: Part[] = [];
-  const walk = (list: Row[]) => {
-    for (const row of list) {
+  const walk = (list: Row[], prefix: string) => {
+    list.forEach((row, i) => {
+      const rid = prefix ? `${prefix}.${i}` : `${base}:row:${i}`;
       if (row.kind) {
         const key = `${row.kind}:${row.path ?? row.name ?? ""}`;
         if (!seen.has(key)) {
           seen.add(key);
-          out.push({ kind: row.kind, name: row.name ?? row.path ?? row.kind, count: row.count ?? 1, manual: !!row.manual });
+          out.push({ kind: row.kind, name: row.name ?? row.path ?? row.kind, count: row.count ?? 1, manual: !!row.manual, rid });
         }
       }
-      walk(row.rows);
-    }
+      walk(row.rows, rid);
+    });
   };
-  walk(rows);
+  walk(rows, "");
   return out;
 }
 
 <const/lane=input.lane/>
 <const/step=input.step/>
 <const/href=`#${lane.id}/${step.id}`/>
-<const/all=parts(step.rows)/>
+<const/all=parts(step.rows, href.slice(1))/>
 <const/badges=(Object.entries(BADGES) as [keyof typeof BADGES, (typeof BADGES)[keyof typeof BADGES]][])
   .map(([key, def]) => {
     const list = all.filter((p) => (def.kinds as readonly string[]).includes(p.kind));
@@ -65,7 +69,7 @@ static function parts(rows: Row[]): Part[] {
     <span class="node-parts">
       <for|b, i| of=badges>
         <a class="badge" data-badge=b.key href=href style=`anchor-name: --${uid}-${i}`
-          aria-label=`${b.title}: ${b.total}. Open ${step.title}` aria-describedby=`${uid}-${i}`>
+          data-open-tab="anatomy" aria-label=`${b.title}: ${b.total}. Open ${step.title}` aria-describedby=`${uid}-${i}`>
           <kind-icon kind=b.icon/>
           <if=(b.total > 1)><span class="badge-n">${b.total}</span></if>
         </a>
@@ -74,7 +78,11 @@ static function parts(rows: Row[]): Part[] {
           <div class="badge-pop-title">${b.title} <span class="badge-pop-count">${b.total}</span></div>
           <ul>
             <for|p| of=b.list>
-              <li><kind-icon kind=p.kind/><span class="badge-pop-name">${p.name}</span><if=(p.count > 1)><span class="badge-pop-n">×${p.count}</span></if><if=p.manual><span class="badge-pop-man">manual</span></if></li>
+              <li>
+                <a class="badge-pop-item" href=href data-row=p.rid>
+                  <kind-icon kind=p.kind/><span class="badge-pop-name">${p.name}</span><if=(p.count > 1)><span class="badge-pop-n">×${p.count}</span></if><if=p.manual><span class="badge-pop-man">manual</span></if>
+                </a>
+              </li>
             </for>
           </ul>
         </div>
@@ -85,41 +93,64 @@ static function parts(rows: Row[]): Part[] {
 
 <script>
   // Pointing at or focusing a badge shows its list; a click pins it, a second click or Esc closes it.
-  // One badge list is open at a time. Without script the badge is a link to the step's panel.
+  // One badge list is open at a time. Without script the badge and each item are links to the step's panel.
   // The state is shared by every step on the page: one list at a time, one click and one key listener.
-  type Shared = { open: HTMLElement | null; pinned: boolean; bound: boolean };
+  // Leaving the badge or the list waits a short grace delay, then fades the list out; coming back cancels.
+  type Shared = { open: HTMLElement | null; pinned: boolean; bound: boolean; grace: number; fade: number };
+  const GRACE_MS = 150;
+  const FADE_MS = 300;
   const w = window as unknown as { __badgeList?: Shared };
-  const g: Shared = (w.__badgeList ??= { open: null, pinned: false, bound: false });
+  const g: Shared = (w.__badgeList ??= { open: null, pinned: false, bound: false, grace: 0, fade: 0 });
   const popOf = (badge: Element) => document.getElementById(badge.getAttribute("aria-describedby") ?? "");
+  const cancelClose = () => {
+    clearTimeout(g.grace);
+    clearTimeout(g.fade);
+    if (g.open) popOf(g.open)?.classList.remove("is-closing");
+  };
   const show = (badge: HTMLElement) => {
     const pop = popOf(badge);
     if (!pop) return;
     if (g.open && g.open !== badge) hide();
+    cancelClose();
     if (!pop.matches(":popover-open")) pop.showPopover();
     badge.classList.add("is-open");
     g.open = badge;
   };
   const hide = () => {
+    cancelClose();
     if (!g.open) return;
     popOf(g.open)?.hidePopover();
     g.open.classList.remove("is-open");
     g.open = null;
     g.pinned = false;
   };
+  const scheduleClose = () => {
+    cancelClose();
+    const open = g.open;
+    if (!open) return;
+    g.grace = window.setTimeout(() => {
+      popOf(open)?.classList.add("is-closing");
+      g.fade = window.setTimeout(() => {
+        if (g.open === open) hide();
+      }, FADE_MS);
+    }, GRACE_MS);
+  };
   const badgeAt = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>(".badge") ?? null;
   const popAt = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>(".badge-pop") ?? null;
+  const onOpen = (t: EventTarget | null) => !!g.open && (badgeAt(t) === g.open || popAt(t) === popOf(g.open));
   node().addEventListener("pointerover", (e) => {
     if ((e as PointerEvent).pointerType !== "mouse") return;
+    if (g.pinned) return;
     const b = badgeAt(e.target);
-    if (b && !g.pinned) show(b);
+    if (b) show(b);
+    else if (onOpen(e.target)) cancelClose();
   });
   node().addEventListener("pointerout", (e) => {
     if ((e as PointerEvent).pointerType !== "mouse" || !g.open || g.pinned) return;
-    if (!badgeAt(e.target) && !popAt(e.target)) return;
-    const to = (e as PointerEvent).relatedTarget as Node | null;
-    // Stay open while the pointer moves between the badge and its list.
-    if (to && (badgeAt(to) === g.open || popAt(to) === popOf(g.open))) return;
-    hide();
+    if (!onOpen(e.target)) return;
+    // Moving between the badge and its list is not leaving.
+    if (onOpen((e as PointerEvent).relatedTarget)) return;
+    scheduleClose();
   });
   node().addEventListener("focusin", (e) => {
     const b = badgeAt(e.target);
@@ -127,9 +158,19 @@ static function parts(rows: Row[]): Part[] {
   });
   node().addEventListener("focusout", (e) => {
     const to = (e as FocusEvent).relatedTarget as Node | null;
-    if (!g.pinned && (!to || !node().contains(to))) hide();
+    // Only this step's own list: focus leaving another step must not close a list the pointer opened.
+    if (!g.pinned && g.open && node().contains(g.open) && (!to || !node().contains(to))) hide();
   });
   node().addEventListener("click", (e) => {
+    const item = (e.target as Element | null)?.closest?.<HTMLElement>(".badge-pop-item");
+    if (item) {
+      // The side panel pins the step, opens its Anatomy tab and shows the row.
+      e.preventDefault();
+      e.stopPropagation();
+      hide();
+      item.dispatchEvent(new CustomEvent("panel-row", { bubbles: true, detail: { href: item.getAttribute("href"), row: item.dataset.row } }));
+      return;
+    }
     const b = badgeAt(e.target);
     if (!b) return;
     e.preventDefault();
@@ -138,6 +179,7 @@ static function parts(rows: Row[]): Part[] {
     else {
       show(b);
       g.pinned = true;
+      b.dispatchEvent(new CustomEvent("panel-row", { bubbles: true, detail: { href: b.getAttribute("href"), row: null } }));
     }
   });
   if (!g.bound) {
@@ -301,6 +343,12 @@ static function parts(rows: Row[]): Part[] {
     color: var(--fg);
     font-size: 0.875rem;
     line-height: 1.3;
+    opacity: 1;
+    transition: opacity 300ms ease-out;
+  }
+  /* The grace delay is over: the list fades out, and coming back over it or its badge cancels the close. */
+  .badge-pop.is-closing {
+    opacity: 0;
   }
   /* Bridges the gap to the badge, so the pointer stays over the list on its way in. */
   .badge-pop::before {
@@ -337,13 +385,25 @@ static function parts(rows: Row[]): Part[] {
     list-style: none;
   }
   .badge-pop li {
+    margin: 0;
+  }
+  .badge-pop-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 0;
     padding: 0.3rem 0.375rem;
+    border-radius: 3px;
+    color: var(--fg);
     font-weight: 600;
     overflow-wrap: anywhere;
+    text-decoration: none;
+  }
+  .badge-pop-item:hover {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  .badge-pop-item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
   .badge-pop-n {
     color: var(--muted);
