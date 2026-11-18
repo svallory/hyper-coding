@@ -1,14 +1,20 @@
 export interface Input {
-  case: "nav" | "reading" | "cover" | "legend";
+  case: "nav" | "nav-comparison" | "reading" | "cover" | "legend";
 }
 
 <if=input.case === "nav">
-  <lane-nav label="Playbooks" title="Lanes">
+  <lane-nav label="Playbooks" page="playbooks">
     <@group title="Entry"><a href="#router">Router</a></@group>
     <@group title="Nothing here"/>
     <@group title="Understand"><a href="#investigation">Investigation</a></@group>
   </lane-nav>
 </if>
+<else-if=input.case === "nav-comparison">
+  <lane-nav label="Sections" page="comparison">
+    <a href="#alpha">alpha</a>
+    <@section to="questions">Questions</@section>
+  </lane-nav>
+</else-if>
 <else-if=input.case === "reading">
   <reading-list id="reading" title="My reading">
     <@item>first</@item>

@@ -86,6 +86,48 @@ describe.each(names)("the %s page", (page) => {
 		expect(bad).toEqual([]);
 	});
 
+	it("reserves no column and writes no placeholder for the panel (AC-1)", () => {
+		expect(root.text).not.toContain("Pick a step");
+		expect(root.querySelector(".side-empty")).toBeNull();
+		const aside = root.querySelector("aside.side-panel");
+		expect(aside?.hasAttribute("data-open")).toBe(false);
+	});
+
+	it("has one top bar with the title, the page's section links and a link to the other page (AC-6)", () => {
+		const bars = root.querySelectorAll("nav.site-nav");
+		expect(bars).toHaveLength(1);
+		const bar = bars[0];
+		expect(bar.querySelector("a.tb")?.text.trim()).toBe("Agent stacks");
+		const links = bar.querySelectorAll(".tl a[href^='#']").map((a) => attr(a, "href").slice(1));
+		expect(links.length).toBeGreaterThan(5);
+		const ids = root.querySelectorAll("[id]").map((e) => attr(e, "id"));
+		expect(links.filter((l) => !ids.includes(l))).toEqual([]);
+		expect(attr(bar.querySelector("a.other") as HTMLElement, "href")).toBe(
+			page === "comparison" ? "/pstack/playbooks/" : "/",
+		);
+		const toggle = bar.querySelector("button.theme-toggle");
+		expect(attr(toggle as HTMLElement, "aria-label")).toMatch(/^Switch to (dark|light) theme$/);
+		expect(toggle?.text.trim()).toBe("");
+		expect(toggle?.querySelector("svg")).not.toBeNull();
+	});
+
+	it("has no row of lane links outside the top bar (AC-6)", () => {
+		const outside = root
+			.querySelectorAll("[data-lane-link], .lane-nav, .nav-row")
+			.filter((e) => !e.closest("nav.site-nav"));
+		expect(outside).toEqual([]);
+	});
+
+	it("names the lane, the position and the group under each step panel's title (AC-11)", () => {
+		const subs = root
+			.querySelectorAll("[data-panel='step']")
+			.map((p) => p.querySelector(".panel-sub")?.text.trim() ?? "");
+		expect(subs.length).toBeGreaterThan(0);
+		expect(
+			subs.filter((s) => !/^.+, step \d+ of \d+, (plan|build|check|ship|learn)\b/.test(s)),
+		).toEqual([]);
+	});
+
 	it("repeats no id (C-11)", () => {
 		const ids = root.querySelectorAll("[id]").map((e) => attr(e, "id"));
 		expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);

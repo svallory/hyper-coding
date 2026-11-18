@@ -43,6 +43,7 @@ const contrast = (a: string, b: string): number => {
 };
 
 const SURFACES = ["--bg", "--surface", "--sunk"];
+const WARM = ["--manual", "--warning"];
 const ICONS = ["--icon-skill", "--icon-agent", "--icon-hook", "--icon-file", "--icon-code"];
 
 describe.each([
@@ -59,6 +60,15 @@ describe.each([
 		}
 	});
 
+	it.each(WARM)("%s resolves to a colour that is 3:1 or more on every surface", (name) => {
+		const ref = /^var\((--[\w-]+)\)$/.exec(tokens[name] ?? "");
+		const colour = ref ? tokens[ref[1]] : tokens[name];
+		expect(colour, name).toMatch(/^#[0-9a-f]{6}$/i);
+		for (const surface of SURFACES) {
+			expect(contrast(colour, tokens[surface])).toBeGreaterThanOrEqual(3);
+		}
+	});
+
 	it("the five icon colours differ from each other", () => {
 		expect(new Set(ICONS.map((i) => tokens[i].toLowerCase())).size).toBe(ICONS.length);
 	});
@@ -71,6 +81,11 @@ it("the system-dark rule matches the explicit dark rule", () => {
 	for (const [name, value] of Object.entries(media)) {
 		expect(dark[name], name).toBe(value);
 	}
+});
+
+it("the page face is Archivo and the code face is IBM Plex Mono", () => {
+	expect(light["--sans"]).toMatch(/^"Archivo",/);
+	expect(light["--mono"]).toMatch(/^"IBM Plex Mono",/);
 });
 
 it("kind-icon has no box and an icon size of 16 px or more", () => {
