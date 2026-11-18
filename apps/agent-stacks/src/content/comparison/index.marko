@@ -19,7 +19,7 @@ static const cols = COLUMNS.map((c) => c.key);
 <page-header title="Agent Stack Loops">
   <@lede>The path one piece of work takes from request to merged code in six agent stacks, drawn with one grammar.</@lede>
   <@meta>Each loop was extracted on 2026-11-16 by one subagent reading the repository at the commit shown; no stack was run. A second subagent per stack then rechecked every claim against the source and the authors' own docs; corrections are applied here. A third pass (33 subagents) read every script, hook, agent prompt and reference file a lane step uses, to the last line; the icons and connector details come from it. Notes per stack, with quotes, file paths, author-process.md and verification.md: notes/research/agent-stacks/ (OKF bundle).</@meta>
-  <@how>Each stack is one lane, read left to right. Select a step or a labelled connector and its details open in the panel on the right; the address of the page records the selection, so a link to it shares it. Choose another step to switch, or the panel's close control (or <kbd>Esc</kbd>) to clear it. The two icons in a step list what runs it.</@how>
+  <@how>Each stack is one lane, read left to right. Point at a step or a labelled connector and its details open in the panel on the right. Click to pin them; click again to release. <kbd>Esc</kbd> closes the panel. The address of the page records a pinned selection, so a link to it shares it. The two icons in a step list what runs it.</@how>
 </page-header>
 
 <legend-key label="Key">

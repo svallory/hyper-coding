@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
 	assignSlots,
 	bandHeight,
+	COL_MAX,
+	COL_MIN,
 	type Edge,
 	edgeClass,
+	flowMinWidth,
 	layoutLane,
 	packLanes,
 	type Shape,
@@ -174,5 +177,16 @@ describe("layoutLane", () => {
 		expect(layoutLane(input)).toEqual(a);
 		expect(JSON.stringify(input)).toBe(before);
 		expect(a).toMatchObject({ aboveHeight: 0, belowHeight: 114 });
+	});
+});
+
+describe("flowMinWidth", () => {
+	// A 1440 px window leaves 1288 px for the page and 1286 px inside the lane's card.
+	const CARD_INNER = 1286;
+
+	it("fits Superpowers' 8 steps in the card at 1440 px, and not 9 (pstack scrolls inside its card)", () => {
+		expect(flowMinWidth(8)).toBeLessThanOrEqual(CARD_INNER);
+		expect(flowMinWidth(9)).toBeGreaterThan(CARD_INNER);
+		expect(COL_MIN).toBeLessThan(COL_MAX);
 	});
 });

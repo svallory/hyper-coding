@@ -1,30 +1,48 @@
-import { layoutLane } from "../../model/layout";
+import { COL_MAX, COL_MIN, flowMinWidth, layoutLane } from "../../model/layout";
 import type { Lane } from "../../model/types";
 
 export interface Input {
   lane: Lane;
 }
 
+/** `https://github.com/obra/superpowers` -> `obra/superpowers`. */
+static function repoName(url: string): string {
+  return url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/+$/, "").replace(/\.git$/, "");
+}
+
 <const/lane=input.lane/>
 <const/laid=layoutLane(lane.connectors)/>
+<const/src=lane.source/>
 <section class="lane" id=lane.id data-lane>
   <header class="lane-head">
-    <h2 class="lane-name">${lane.name}</h2>
+    <div class="lane-title">
+      <h2 class="lane-name">${lane.name}</h2>
+      <if=src>
+        <a class="lane-src" data-lane-source href=`${src.repo}/tree/${src.commit}` target="_blank" rel="noopener">${repoName(src.repo)} @${src.commit.slice(0, 7)}</a>
+      </if>
+    </div>
     <p class="lane-by" data-lane-by>
       <if=lane.byContent><${lane.byContent}/></if><else>${lane.by}</else>
       <if=lane.status> · ${lane.status}</if>
     </p>
-    <if=lane.summary><p class="lane-summary"><${lane.summary}/></p></if>
-    <if=lane.order>
-      <p class="lane-order">
-        <strong>${lane.order.label}</strong> <em>${lane.order.lead}</em>.
-        <${lane.order.content}/>
-      </p>
+    <if=lane.summary || lane.order>
+      <div class="lane-intro">
+        <if=lane.summary><div class="lane-summary"><${lane.summary}/></div></if>
+        <if=lane.order>
+          <div class="lane-order">
+            <div class="lane-order-head">
+              <span class="lane-order-label">${lane.order.label}</span>
+              <span class="lane-order-lead">${lane.order.lead}</span>
+            </div>
+            <div class="lane-order-body"><${lane.order.content}/></div>
+          </div>
+        </if>
+      </div>
     </if>
   </header>
   <div class="flow-scroll">
-    <div class="graph" style=`--cols: ${lane.steps.length}; --band-above: ${laid.aboveHeight}px; --band-below: ${laid.belowHeight}px`>
-      <for|owner| of=lane.owners>
+    <div class="graph" style=`--cols: ${lane.steps.length}; --col-min: ${COL_MIN}px; --col-max: ${COL_MAX}px; --flow-min: ${flowMinWidth(lane.steps.length)}px; --band-above: ${laid.aboveHeight}px; --band-below: ${laid.belowHeight}px`>
+      <for|owner, i| of=lane.owners>
         <owner-header owner=owner/>
       </for>
       <for|step| of=lane.steps>
@@ -39,27 +57,95 @@ export interface Input {
 
 <style>
   .lane {
-    margin-bottom: 2.5rem;
+    min-width: 0;
+    margin: 0 0 3rem;
+    padding-top: 0.875rem;
+    border-top: 2px solid var(--fg);
+  }
+  .lane-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.125rem 1rem;
   }
   .lane-name {
     margin: 0;
+    font-size: 1.875rem;
+    line-height: 1.05;
+  }
+  .lane-src {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    white-space: nowrap;
   }
   .lane-by {
+    max-width: none;
+    margin: 0.125rem 0 0.875rem;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
   }
-  /* The graph scrolls inside its own box; the page never does. */
+  .lane-intro {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.875rem 2.5rem;
+    margin-bottom: 1.125rem;
+  }
+  @media (min-width: 1100px) {
+    .lane-intro:has(.lane-order) {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+  }
+  .lane-summary {
+    max-width: 60ch;
+    font-size: 1.0625rem;
+    line-height: 1.5;
+  }
+  .lane-summary > :first-child { margin-top: 0; }
+  .lane-summary > :last-child { margin-bottom: 0; }
+  .lane-order {
+    min-width: 0;
+    padding-left: 0.875rem;
+    border-left: 3px solid var(--line);
+    color: var(--muted);
+    font-size: 0.8438rem;
+    line-height: 1.5;
+  }
+  .lane-order-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .lane-order-label {
+    color: var(--fg);
+    font-weight: 650;
+  }
+  .lane-order-lead {
+    padding: 0 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--fg);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+  .lane-order-body > :first-child { margin-top: 0; }
+  .lane-order-body > :last-child { margin-bottom: 0; }
+  /* The card scrolls its own flow; the page never does. */
   .flow-scroll {
     max-width: 100%;
-    margin-top: 0.75rem;
-    padding-bottom: 0.5rem;
     overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
   }
   .graph {
     display: grid;
-    grid-template-columns: repeat(var(--cols), 152px);
+    grid-template-columns: repeat(var(--cols), minmax(var(--col-min), var(--col-max)));
     grid-template-rows: auto var(--band-above) auto var(--band-below);
-    width: max-content;
-    padding: 0 0 0.5rem;
+    min-width: var(--flow-min);
+    padding: 0 0 0.25rem;
   }
 </style>

@@ -16,7 +16,7 @@ export interface Input {
   </tree-choice>
 </if>
 <else-if=row.rows.length>
-  <li class="tree-item">
+  <li class=`tree-item${row.depth === 0 ? " tree-root" : ""}`>
     <details data-row data-depth=row.depth data-kind=row.kind data-manual=!!row.manual
       open=row.depth < COLLAPSE_FROM_DEPTH - 1>
       <summary><tree-row-line row=row of=input.of/></summary>
@@ -31,7 +31,7 @@ export interface Input {
   </li>
 </else-if>
 <else>
-  <li class="tree-item">
+  <li class=`tree-item${row.depth === 0 ? " tree-root" : ""}`>
     <div data-row data-depth=row.depth data-kind=row.kind data-manual=!!row.manual>
       <tree-row-line row=row of=input.of/>
       <if=row.note><div class="row-note"><${row.note}/></div></if>

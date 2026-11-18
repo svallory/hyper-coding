@@ -5,22 +5,40 @@ export interface Input {
 }
 
 <li class="tree-item tree-choice" data-choice>
-  <div class="choice-label">${input.label}</div>
+  <div class="choice-label"><chip tone="one">one of</chip> <span>${input.label}</span></div>
   <ul class="tree-children choice-alternatives">
     <${input.content}/>
   </ul>
 </li>
 
 <style>
+  .choice-label {
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
   .tree-choice > .choice-alternatives {
-    margin-top: 0.25rem;
+    margin: 0.3rem 0 0;
+    padding: 0;
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  /* Inside a group, the alternatives share one sunk box; at the root each alternative has its own. */
+  .tree-children .tree-choice > .choice-alternatives {
     padding: 0.2rem 0.6rem 0.5rem;
     border: 1px solid var(--edge);
     border-radius: 6px;
     background: var(--sunk);
   }
-  .choice-label {
-    color: var(--muted);
-    font-size: 0.8125rem;
+  .choice-alternatives > .tree-item {
+    padding-left: 0;
+  }
+  .choice-alternatives > .tree-item::before,
+  .choice-alternatives > .tree-item::after {
+    display: none;
+  }
+  .choice-alternatives > .tree-root {
+    padding-left: 0.75rem;
   }
 </style>
