@@ -142,6 +142,27 @@ describe.each(names)("the %s page", (page) => {
 		expect(toggle?.querySelector("svg")).not.toBeNull();
 	});
 
+	it("closes the panel with a link to #side that holds a <kbd> esc", () => {
+		const close = root.querySelector("a.side-close");
+		expect(attr(close as HTMLElement, "href")).toBe("#side");
+		expect(attr(close as HTMLElement, "aria-label")).toBe("Close details panel");
+		expect(close?.querySelector("kbd")?.text.trim()).toBe("esc");
+	});
+
+	it("shows the Esc key of the how paragraph as a <kbd>", () => {
+		expect(root.querySelector("p.how kbd")?.text.trim()).toBe("Esc");
+	});
+
+	it("words the pinned header as bold text to release by unselecting the node", () => {
+		const assets = join(dist, "assets");
+		const js = readdirSync(assets)
+			.filter((f) => f.endsWith(".js"))
+			.map((f) => readFileSync(join(assets, f), "utf8"))
+			.join("\n");
+		expect(js).toContain("Pinned. Unselect node to release.");
+		expect(js).not.toContain("Click it again to release");
+	});
+
 	it("has no row of lane links outside the top bar (AC-6)", () => {
 		const outside = root
 			.querySelectorAll("[data-lane-link], .lane-nav, .nav-row")

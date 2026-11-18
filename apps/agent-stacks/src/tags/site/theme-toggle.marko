@@ -1,6 +1,8 @@
-<button/button class="theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch to dark theme">
+import Button from "../../components/ui/button/button.marko";
+<id/toggleId/>
+<Button id=toggleId class="theme-toggle" variant="outline" size="icon-sm" type="button" aria-label="Switch to dark theme" title="Switch to dark theme">
   <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M10.2 7.4A4.6 4.6 0 0 1 4.6 1.8a4.6 4.6 0 1 0 5.6 5.6z"/></svg>
-</button>
+</Button>
 
 <script>
   const root = document.documentElement;
@@ -10,6 +12,7 @@
   const MOON = "M10.2 7.4A4.6 4.6 0 0 1 4.6 1.8a4.6 4.6 0 1 0 5.6 5.6z";
   const isDark = () => (root.dataset.theme ? root.dataset.theme === "dark" : mq.matches);
   // The icon shows what a click switches to: a sun in the dark theme, a moon in the light one.
+  const button = () => document.getElementById(toggleId) as HTMLButtonElement;
   const sync = () => {
     const dark = isDark();
     const label = `Switch to ${dark ? "light" : "dark"} theme`;
@@ -38,16 +41,13 @@
     width: 30px;
     height: 30px;
     margin: 0;
-    padding: 0;
-    display: grid;
-    place-items: center;
     background: none;
-    border: 1px solid var(--edge);
     border-radius: 6px;
     color: var(--fg);
     cursor: pointer;
   }
   .theme-toggle:hover {
+    color: var(--fg);
     border-color: var(--fg);
     background: var(--surface);
   }
