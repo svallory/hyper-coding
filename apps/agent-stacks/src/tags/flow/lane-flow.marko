@@ -5,7 +5,7 @@ export interface Input {
   lane: Lane;
 }
 
-/** `https://github.com/obra/superpowers` -> `obra/superpowers`. */
+/** A repository address without its host: `obra/superpowers`. */
 static function repoName(url: string): string {
   return url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/+$/, "").replace(/\.git$/, "");
 }
