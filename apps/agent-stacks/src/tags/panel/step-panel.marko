@@ -14,9 +14,8 @@ static const LABELS = {
   gate: "Gate",
   back: "Loops back",
 } as const;
-// v13's order. A step with a "starts" line is a flow step: v13 leaves Via out there, so it follows Who.
+// v13's order.
 static const ORDER = ["starts", "actor", "via", "input", "output", "gate", "back"] as const;
-static const PLAIN = ["via", "actor", "input", "output", "gate", "back"] as const;
 static const ENFORCED = {
   code: "code: a program checks it",
   harness: "the harness",
@@ -40,7 +39,7 @@ static const ENFORCED = {
         <callout title=step.warning.title><${step.warning.content}/></callout>
       </if>
       <dl class="panel-fields">
-        <for|name| of=(step.fields.starts ? ORDER : PLAIN)>
+        <for|name| of=ORDER>
           <if=step.fields[name]>
             <panel-field label=LABELS[name]><${step.fields[name]}/></panel-field>
           </if>
