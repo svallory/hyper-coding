@@ -5,14 +5,22 @@
 // bundle must not carry the map. Re-running `marko-ui add icon --overwrite`
 // discards these edits.
 import { cn } from "../../../lib/utils.ts";
-import { LUCIDE_WRAPPER } from "./render.ts";
 import type { IconName } from "./icon-names.ts";
-server import { resolveIconInner } from "./resolve.ts";
+server import { lucideInner } from "./render.ts";
 
 static const SIZED = "size-4";
+// The `<svg>` attributes Lucide icons share.
+static const LUCIDE_WRAPPER = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  "stroke-width": "2",
+  "stroke-linecap": "round",
+  "stroke-linejoin": "round",
+} as const;
 static let drawIcon: (name: string) => string = () => "";
 server {
-  drawIcon = resolveIconInner;
+  drawIcon = lucideInner;
 }
 
 export interface Input {
