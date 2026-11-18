@@ -359,8 +359,6 @@ static function parts(rows: Row[], base: string): Part[] {
   /* The grace delay is over: the list fades out, and coming back over it or its badge cancels the close. */
   .badge-pop.is-closing {
     opacity: 0;
-    /* A fading list must not catch a click aimed at what shows through it; its badge still cancels the close. */
-    pointer-events: none;
   }
   @media (prefers-reduced-motion: reduce) {
     .badge-pop {
