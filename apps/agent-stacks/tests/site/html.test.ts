@@ -261,13 +261,19 @@ describe.each(names)("the %s page", (page) => {
 	});
 
 	it("ships no client code for icons", () => {
-		const scripts = [
-			...root.querySelectorAll("script[src]").map((e) => attr(e, "src")),
-			...root.querySelectorAll("link[rel=modulepreload]").map((e) => attr(e, "href")),
-		];
-		const code = scripts.map((u) => readFileSync(join(dist, u), "utf8")).join("\n");
-		// the Lucide map (drawings of Book, Bot, TerminalSquare) must not reach the browser
-		for (const drawing of ["M4 19.5v-15A2.5", "M12 8V4H8", "m7 11 2-2-2-2", "M12 5v16"])
+		const assets = join(dist, "assets");
+		const code = readdirSync(assets)
+			.filter((f) => f.endsWith(".js"))
+			.map((f) => readFileSync(join(assets, f), "utf8"))
+			.join("\n");
+		expect(code.length).toBeGreaterThan(0);
+		// the Lucide map (drawings of Book, Bot, TerminalSquare, BookOpen) must not reach the browser
+		for (const drawing of [
+			"M4 19.5v-15A2.5",
+			"M12 8V4H8",
+			"m7 11 2-2-2-2",
+			"M20.001 19A2 2 0 0022 17V5",
+		])
 			expect(code).not.toContain(drawing);
 	});
 });
