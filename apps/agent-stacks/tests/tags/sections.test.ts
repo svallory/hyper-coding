@@ -1,3 +1,4 @@
+import { parse } from "node-html-parser";
 import { describe, expect, it } from "vitest";
 import Sections from "./fixtures/sections.marko";
 
@@ -17,10 +18,30 @@ const inner = (html: string, tag: string): string[] =>
 	);
 
 describe("lane-nav", () => {
-	it("renders each group with its title and what it holds, in order, and nothing for an empty group", () => {
-		const html = render("nav");
-		expect(text(html)).toBe("Lanes Entry Router Understand Investigation");
-		expect(html.match(/data-nav-group/g)).toHaveLength(2);
+	const bar = (kind: string) => parse(render(kind)).querySelector("nav.site-nav");
+	const links = (kind: string) =>
+		(bar(kind)?.querySelectorAll(".tl a") ?? []).map((a) => a.text.trim());
+
+	it("is the top bar: the title, a link to the other page and the theme toggle", () => {
+		const nav = bar("nav");
+		expect(nav?.querySelector("a.tb")?.text.trim()).toBe("Agent stacks");
+		expect(nav?.querySelector("a.other")?.getAttribute("href")).toBe("/");
+		expect(nav?.querySelector("button.theme-toggle")?.getAttribute("aria-label")).toBe(
+			"Switch to dark theme",
+		);
+	});
+
+	it("renders each group's links in order, and nothing for an empty group", () => {
+		expect(links("nav")).toEqual(["Router", "Investigation"]);
+		expect(bar("nav")?.querySelectorAll("[data-nav-group]")).toHaveLength(2);
+		expect(render("nav")).not.toContain("Nothing here");
+	});
+
+	it("links the comparison page to the playbooks page, with its section links after the lanes", () => {
+		expect(bar("nav-comparison")?.querySelector("a.other")?.getAttribute("href")).toBe(
+			"/pstack/playbooks/",
+		);
+		expect(links("nav-comparison")).toEqual(["alpha", "Questions"]);
 	});
 });
 

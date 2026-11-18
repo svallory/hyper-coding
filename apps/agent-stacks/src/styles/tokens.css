@@ -11,6 +11,8 @@
 	--edge: #566178;
 	--when-bg: #b84f00;
 	--when-fg: #ffffff;
+	--manual: var(--when-bg);
+	--warning: var(--when-bg);
 	--plan-l: #086b66;
 	--build-l: #1a58b3;
 	--check-l: #7d5400;
@@ -23,9 +25,12 @@
 	--icon-file: #4a5466;
 	--icon-code: #1a7f37;
 	--icon-size: 18px;
-	--sans: "Archivo Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
 	--mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 	--cond: 78%;
+	--side-w: clamp(330px, 31vw, 450px);
+	--sheet-h: min(52dvh, 480px);
+	--bar-h: 46px;
 	color-scheme: light;
 }
 

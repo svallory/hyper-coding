@@ -1,29 +1,61 @@
-<button/button class="theme-toggle" type="button" aria-label="Switch theme">Theme</button>
+<button/button class="theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch to dark theme">
+  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M10.2 7.4A4.6 4.6 0 0 1 4.6 1.8a4.6 4.6 0 1 0 5.6 5.6z"/></svg>
+</button>
 
 <script>
   const root = document.documentElement;
-  const isDark = () =>
-    root.dataset.theme
-      ? root.dataset.theme === "dark"
-      : matchMedia("(prefers-color-scheme: dark)").matches;
+  const mq = matchMedia("(prefers-color-scheme: dark)");
+  const SUN =
+    "M6 3.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z M6 .8v1.2 M6 10v1.2 M.8 6H2 M10 6h1.2 M2.3 2.3l.9.9 M8.8 8.8l.9.9 M2.3 9.7l.9-.9 M8.8 3.2l.9-.9";
+  const MOON = "M10.2 7.4A4.6 4.6 0 0 1 4.6 1.8a4.6 4.6 0 1 0 5.6 5.6z";
+  const isDark = () => (root.dataset.theme ? root.dataset.theme === "dark" : mq.matches);
+  // The icon shows what a click switches to: a sun in the dark theme, a moon in the light one.
+  const sync = () => {
+    const dark = isDark();
+    const label = `Switch to ${dark ? "light" : "dark"} theme`;
+    button().setAttribute("aria-label", label);
+    button().title = label;
+    button().querySelector("path")?.setAttribute("d", dark ? SUN : MOON);
+  };
+  sync();
   button().addEventListener("click", () => {
     const next = isDark() ? "light" : "dark";
     root.dataset.theme = next;
     try {
       localStorage.setItem("theme", next);
     } catch {}
-  });
+    sync();
+  }, { signal: $signal });
+  new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+  mq.addEventListener("change", sync, { signal: $signal });
 </script>
 
 <style>
   .theme-toggle {
-    margin-left: auto;
-    font: inherit;
-    color: var(--fg);
-    background: var(--surface);
-    border: 1px solid var(--line);
+    flex: none;
+    width: 30px;
+    height: 30px;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    background: none;
+    border: 1px solid var(--edge);
     border-radius: 6px;
-    padding: 0.2rem 0.7rem;
+    color: var(--fg);
     cursor: pointer;
+  }
+  .theme-toggle:hover {
+    border-color: var(--fg);
+    background: var(--surface);
+  }
+  .theme-toggle svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 </style>
