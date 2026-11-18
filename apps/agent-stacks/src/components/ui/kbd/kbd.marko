@@ -5,11 +5,12 @@ static const styles = {
 
 export interface Input extends Marko.Input<"kbd"> {}
 
-<const/{ class: className, ...rest }=input/>
+<const/{ class: className, content, ...rest }=input/>
 
 <kbd
   data-slot="kbd"
   class=cn(styles.root, className)
   ...rest
-/>
-<${input.content}/>
+>
+  <${content}/>
+</kbd>

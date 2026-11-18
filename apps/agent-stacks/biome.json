@@ -7,7 +7,6 @@
 			"!components.json",
 			"!skills-lock.json",
 			"!src/components/ui",
-			"!src/lib/native-attrs.ts",
 			"!src/lib/utils.ts",
 			"!src/styles/globals.css"
 		]

@@ -39,6 +39,34 @@ describe("the pstack lane on the comparison page", () => {
 	});
 });
 
+const assetText = (ext: string) =>
+	readdirSync(join(dist, "assets"))
+		.filter((f) => f.endsWith(ext))
+		.map((f) => readFileSync(join(dist, "assets", f), "utf8"))
+		.join("\n");
+
+describe("the panel's pinned header and the page's tokens", () => {
+	it("words the pinned header as text to release by unselecting the node", () => {
+		const js = assetText(".js");
+		expect(js).toContain("Pinned. Unselect node to release.");
+		expect(js).not.toContain("Click it again to release");
+	});
+
+	it("keeps the app's --muted and --accent after marko-ui's :root block", () => {
+		const css = assetText(".css");
+		for (const [name, app] of [
+			["--muted", "#4a5466"],
+			["--accent", "#cf1757"],
+		]) {
+			const last = (re: RegExp) => Math.max(-1, ...[...css.matchAll(re)].map((m) => m.index ?? -1));
+			const mine = last(new RegExp(`${name}:\\s*oklch\\(`, "g"));
+			const theirs = last(new RegExp(`${name}:\\s*${app}`, "g"));
+			expect(mine, `${name} from marko-ui`).toBeGreaterThan(-1);
+			expect(theirs, `${name} from the app`).toBeGreaterThan(mine);
+		}
+	});
+});
+
 describe.each(names)("the %s page", (page) => {
 	const root = roots[page];
 
@@ -147,6 +175,7 @@ describe.each(names)("the %s page", (page) => {
 		expect(attr(close as HTMLElement, "href")).toBe("#side");
 		expect(attr(close as HTMLElement, "aria-label")).toBe("Close details panel");
 		expect(close?.querySelector("kbd")?.text.trim()).toBe("esc");
+		expect(close?.text.replace(/\s+/g, " ").trim()).toBe("Close esc");
 		expect(attr(close as HTMLElement, "data-slot")).toBe("button");
 	});
 
@@ -154,16 +183,9 @@ describe.each(names)("the %s page", (page) => {
 		const key = root.querySelector("p.how kbd");
 		expect(key?.text.trim()).toBe("Esc");
 		expect(attr(key as HTMLElement, "data-slot")).toBe("kbd");
-	});
-
-	it("words the pinned header as bold text to release by unselecting the node", () => {
-		const assets = join(dist, "assets");
-		const js = readdirSync(assets)
-			.filter((f) => f.endsWith(".js"))
-			.map((f) => readFileSync(join(assets, f), "utf8"))
-			.join("\n");
-		expect(js).toContain("Pinned. Unselect node to release.");
-		expect(js).not.toContain("Click it again to release");
+		const how = root.querySelector("p.how")?.text.replace(/\s+/g, " ") ?? "";
+		expect(how).toContain("click again to release. Esc closes the panel.");
+		expect(how).not.toMatch(/Esc\s*Esc/);
 	});
 
 	it("has no row of lane links outside the top bar (AC-6)", () => {
