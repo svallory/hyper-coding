@@ -5,9 +5,14 @@ export interface Input {
   lane: Lane;
 }
 
+/** A repository address without a trailing slash or `.git`. */
+static function repoUrl(url: string): string {
+  return url.replace(/\/+$/, "").replace(/\.git$/, "");
+}
+
 /** A repository address without its host: `obra/superpowers`. */
 static function repoName(url: string): string {
-  return url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/+$/, "").replace(/\.git$/, "");
+  return repoUrl(url).replace(/^https?:\/\/[^/]+\//, "");
 }
 
 <const/lane=input.lane/>
@@ -18,7 +23,7 @@ static function repoName(url: string): string {
     <div class="lane-title">
       <h2 class="lane-name">${lane.name}</h2>
       <if=src>
-        <a class="lane-src" data-lane-source href=`${src.repo}/tree/${src.commit}` target="_blank" rel="noopener">${repoName(src.repo)} @${src.commit.slice(0, 7)}</a>
+        <a class="lane-src" data-lane-source href=`${repoUrl(src.repo)}/tree/${src.commit}` target="_blank" rel="noopener">${repoName(src.repo)} @${src.commit.slice(0, 7)}</a>
       </if>
     </div>
     <p class="lane-by" data-lane-by>
@@ -42,7 +47,7 @@ static function repoName(url: string): string {
   </header>
   <div class="flow-scroll">
     <div class="graph" style=`--cols: ${lane.steps.length}; --col-min: ${COL_MIN}px; --col-max: ${COL_MAX}px; --flow-min: ${flowMinWidth(lane.steps.length)}px; --band-above: ${laid.aboveHeight}px; --band-below: ${laid.belowHeight}px`>
-      <for|owner, i| of=lane.owners>
+      <for|owner| of=lane.owners>
         <owner-header owner=owner/>
       </for>
       <for|step| of=lane.steps>

@@ -78,9 +78,12 @@ describe("the comparison page", () => {
 		}
 	});
 
-	it("describes point, pin, release and Esc in the how-to-read paragraph (D38)", () => {
-		const html = readFileSync(`${dist}/${PAGES.comparison}`, "utf8");
-		expect(html).toContain("Click to pin");
-		expect(html).not.toContain("close control");
-	});
+	it.each(["comparison", "playbooks"] as const)(
+		"describes point, pin, release and Esc in the %s how-to-read paragraph (D38)",
+		(page) => {
+			const html = readFileSync(`${dist}/${PAGES[page]}`, "utf8");
+			expect(html).toContain("Click to pin");
+			expect(html).not.toContain("close control");
+		},
+	);
 });

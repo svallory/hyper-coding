@@ -86,64 +86,72 @@ static function parts(rows: Row[]): Part[] {
 <script>
   // Pointing at or focusing a badge shows its list; a click pins it, a second click or Esc closes it.
   // One badge list is open at a time. Without script the badge is a link to the step's panel.
-  let open: HTMLElement | null = null;
-  let pinned = false;
+  // The state is shared by every step on the page: one list at a time, one click and one key listener.
+  type Shared = { open: HTMLElement | null; pinned: boolean; bound: boolean };
+  const w = window as unknown as { __badgeList?: Shared };
+  const g: Shared = (w.__badgeList ??= { open: null, pinned: false, bound: false });
   const popOf = (badge: Element) => document.getElementById(badge.getAttribute("aria-describedby") ?? "");
   const show = (badge: HTMLElement) => {
     const pop = popOf(badge);
     if (!pop) return;
-    if (open && open !== badge) hide();
+    if (g.open && g.open !== badge) hide();
     if (!pop.matches(":popover-open")) pop.showPopover();
     badge.classList.add("is-open");
-    open = badge;
+    g.open = badge;
   };
   const hide = () => {
-    if (!open) return;
-    popOf(open)?.hidePopover();
-    open.classList.remove("is-open");
-    open = null;
-    pinned = false;
+    if (!g.open) return;
+    popOf(g.open)?.hidePopover();
+    g.open.classList.remove("is-open");
+    g.open = null;
+    g.pinned = false;
   };
   const badgeAt = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>(".badge") ?? null;
   const popAt = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>(".badge-pop") ?? null;
   node().addEventListener("pointerover", (e) => {
     if ((e as PointerEvent).pointerType !== "mouse") return;
     const b = badgeAt(e.target);
-    if (b && !pinned) show(b);
+    if (b && !g.pinned) show(b);
   });
   node().addEventListener("pointerout", (e) => {
-    if ((e as PointerEvent).pointerType !== "mouse" || !open || pinned) return;
+    if ((e as PointerEvent).pointerType !== "mouse" || !g.open || g.pinned) return;
     if (!badgeAt(e.target) && !popAt(e.target)) return;
     const to = (e as PointerEvent).relatedTarget as Node | null;
     // Stay open while the pointer moves between the badge and its list.
-    if (to && (badgeAt(to) === open || popAt(to) === popOf(open))) return;
+    if (to && (badgeAt(to) === g.open || popAt(to) === popOf(g.open))) return;
     hide();
   });
   node().addEventListener("focusin", (e) => {
     const b = badgeAt(e.target);
-    if (b && !pinned) show(b);
+    if (b && !g.pinned) show(b);
   });
   node().addEventListener("focusout", (e) => {
     const to = (e as FocusEvent).relatedTarget as Node | null;
-    if (!pinned && (!to || !node().contains(to))) hide();
+    if (!g.pinned && (!to || !node().contains(to))) hide();
   });
   node().addEventListener("click", (e) => {
     const b = badgeAt(e.target);
     if (!b) return;
     e.preventDefault();
     e.stopPropagation();
-    if (open === b && pinned) hide();
+    if (g.open === b && g.pinned) hide();
     else {
       show(b);
-      pinned = true;
+      g.pinned = true;
     }
   });
-  document.addEventListener("click", (e) => {
-    if (open && pinned && !node().contains(e.target as Node)) hide();
-  }, true);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && open) hide();
-  });
+  if (!g.bound) {
+    g.bound = true;
+    document.addEventListener("click", (e) => {
+      if (g.open && g.pinned && !badgeAt(e.target) && !popAt(e.target)) hide();
+    }, true);
+    // Capture phase: the first Esc closes the list and does not reach the side panel.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !g.open) return;
+      e.stopImmediatePropagation();
+      hide();
+    }, true);
+  }
 </script>
 
 <style>
