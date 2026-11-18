@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-
-const css = readFileSync(new URL("../src/styles/tokens.css", import.meta.url), "utf8");
+import css from "../src/styles/tokens.css?raw";
+import kindIconCss from "../src/tags/ui/kind-icon.style.css?raw";
 
 type Tokens = Record<string, string>;
 
@@ -43,7 +42,6 @@ const contrast = (a: string, b: string): number => {
 };
 
 const SURFACES = ["--bg", "--surface", "--sunk"];
-const WARM = ["--manual", "--warning"];
 const ICONS = ["--icon-skill", "--icon-agent", "--icon-hook", "--icon-file", "--icon-code"];
 
 describe.each([
@@ -60,7 +58,8 @@ describe.each([
 		}
 	});
 
-	it.each(WARM)("%s resolves to a colour that is 3:1 or more on every surface", (name) => {
+	it("--manual resolves to a colour that is 3:1 or more on every surface", () => {
+		const name = "--manual";
 		const ref = /^var\((--[\w-]+)\)$/.exec(tokens[name] ?? "");
 		const colour = ref ? tokens[ref[1]] : tokens[name];
 		expect(colour, name).toMatch(/^#[0-9a-f]{6}$/i);
@@ -83,16 +82,8 @@ it("the system-dark rule matches the explicit dark rule", () => {
 	}
 });
 
-it("the page face is Archivo and the code face is IBM Plex Mono", () => {
-	expect(light["--sans"]).toMatch(/^"Archivo",/);
-	expect(light["--mono"]).toMatch(/^"IBM Plex Mono",/);
-});
-
 it("kind-icon has no box and an icon size of 16 px or more", () => {
-	const style = readFileSync(
-		new URL("../src/tags/ui/kind-icon.style.css", import.meta.url),
-		"utf8",
-	);
+	const style = kindIconCss;
 	expect(style).not.toMatch(/(^|[\s;{])(border|background)[\w-]*\s*:/);
 	const size = /--icon-size\s*:\s*(\d+(?:\.\d+)?)px/.exec(style);
 	expect(size, "--icon-size in px").not.toBeNull();

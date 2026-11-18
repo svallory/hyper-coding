@@ -75,9 +75,10 @@ export interface Input {
     aside.toggleAttribute("data-pinned", !!pinned);
     (aside as HTMLElement & { inert: boolean }).inert = !shown;
     label.textContent = pinned ? "Pinned. Click it again to release." : "Following the pointer. Click to pin.";
-    for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href^='#']"))) {
-      if (aside.contains(a)) continue;
-      if (pinned && a.getAttribute("href") === `#${pinned}`) a.setAttribute("aria-current", "true");
+    // Only the links that open panels carry aria-current; the top bar's scroll spy owns its own.
+    const want = pinned ? `#${pinned}` : null;
+    for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>("a[data-step], a[data-connector]"))) {
+      if (want && a.getAttribute("href") === want) a.setAttribute("aria-current", "true");
       else a.removeAttribute("aria-current");
     }
   };
@@ -94,6 +95,7 @@ export interface Input {
   };
   const peek = (panel: HTMLElement) => {
     if (pinned || dismissed) return;
+    if (shown === panel && aside.hasAttribute("data-open")) return;
     fill(panel);
     render();
   };
@@ -109,6 +111,10 @@ export interface Input {
     render();
   };
   const close = () => {
+    // Keep a keyboard user's place: the aside goes inert, so focus moves back to the item's own link.
+    if (shown && aside.contains(document.activeElement)) {
+      document.querySelector<HTMLElement>(`a[href="#${CSS.escape(shown.id)}"]:not(.side-panel a)`)?.focus({ preventScroll: true });
+    }
     release();
     shown = null;
     dismissed = true;
@@ -147,6 +153,11 @@ export interface Input {
       return;
     }
     if (e.key !== " ") return;
+    if ((e.target as Element).closest?.(".side-close")) {
+      e.preventDefault();
+      close();
+      return;
+    }
     const t = targetOf(e.target);
     if (!t || (e.target as Element).tagName !== "A") return;
     e.preventDefault();
@@ -156,7 +167,14 @@ export interface Input {
   // An address that names a panel pins it, on load and when the fragment changes.
   const fromAddress = (scroll: boolean) => {
     const panel = panelFor(location.hash);
-    if (!panel) return;
+    if (!panel) {
+      // The fragment moved elsewhere (a section link): the pin has no address any more, so let it go.
+      if (pinned) {
+        pinned = null;
+        render();
+      }
+      return;
+    }
     dismissed = false;
     if (pinned !== panel.id) {
       fill(panel);

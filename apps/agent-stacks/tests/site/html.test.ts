@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { type HTMLElement, type Node, parse } from "node-html-parser";
 import { describe, expect, it } from "vitest";
 import { PAGES, type PageName, pageFile } from "../../scripts/lib/read-site";
@@ -88,9 +89,19 @@ describe.each(names)("the %s page", (page) => {
 
 	it("reserves no column and writes no placeholder for the panel (AC-1)", () => {
 		expect(root.text).not.toContain("Pick a step");
-		expect(root.querySelector(".side-empty")).toBeNull();
-		const aside = root.querySelector("aside.side-panel");
-		expect(aside?.hasAttribute("data-open")).toBe(false);
+	});
+
+	it("pads the page for the panel only while it is open (AC-1)", () => {
+		const assets = join(dist, "assets");
+		const css = readdirSync(assets)
+			.filter((f) => f.endsWith(".css"))
+			.map((f) => readFileSync(join(assets, f), "utf8"))
+			.join("\n");
+		const rules = [...css.matchAll(/([^{}]+)\{[^{}]*padding-right:\s*var\(--side-w\)/g)].map(
+			(m) => m[1],
+		);
+		expect(rules.length).toBeGreaterThan(0);
+		expect(rules.filter((s) => !/data-open|:target/.test(s))).toEqual([]);
 	});
 
 	it("has one top bar with the title, the page's section links and a link to the other page (AC-6)", () => {

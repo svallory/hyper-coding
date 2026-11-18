@@ -6,6 +6,8 @@ export default defineConfig({
 	plugins: [marko({ linked: false })],
 	test: {
 		environment: "node",
+		// Tests read stylesheets as text (`?raw`), so `vitest related` can select them.
+		css: { include: /\.css\?raw$/ },
 		include: ["tests/**/*.test.ts"],
 	},
 });
