@@ -55,4 +55,32 @@ describe("the comparison page", () => {
 		expect(links).toHaveLength(2);
 		for (const a of links) expect(attr(a, "href")).toMatch(/#L\d+/);
 	});
+
+	it("gives each lane with a source one repository link at its pinned commit (AC-7)", () => {
+		const lanes = root.querySelectorAll("[data-lane]");
+		const linked = lanes.filter((l) => l.querySelector(".lane-head [data-lane-source]"));
+		// The Hyper lane is this project's own proposal: it has no repository to point at.
+		expect(linked.map((l) => attr(l, "id"))).toEqual([
+			"superpowers",
+			"pstack",
+			"aihero",
+			"ce",
+			"omo",
+			"lavra",
+		]);
+		for (const lane of linked) {
+			const links = lane.querySelectorAll(".lane-head [data-lane-source]");
+			expect(links, attr(lane, "id")).toHaveLength(1);
+			expect(attr(links[0], "href")).toMatch(
+				/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/tree\/[0-9a-f]{40}$/,
+			);
+			expect(links[0].text).toMatch(/^[\w.-]+\/[\w.-]+ @[0-9a-f]{7}$/);
+		}
+	});
+
+	it("describes point, pin, release and Esc in the how-to-read paragraph (D38)", () => {
+		const html = readFileSync(`${dist}/${PAGES.comparison}`, "utf8");
+		expect(html).toContain("Click to pin");
+		expect(html).not.toContain("close control");
+	});
 });

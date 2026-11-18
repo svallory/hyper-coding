@@ -32,6 +32,14 @@ describe("a valid lane, view panels", () => {
 		expect(link.startsWith("<a ")).toBe(true);
 	});
 
+	it("boxes each root group, hangs children from it, and ends with the kind legend (AC-11)", () => {
+		expect(tagsWith(html, "tree-root")).toHaveLength(1);
+		expect(html.indexOf("tree-children")).toBeGreaterThan(html.indexOf("tree-root"));
+		const key = /data-tree-key>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+		expect(text(key)).toBe("skill file subagent prompt tool hook");
+		expect(html.lastIndexOf("data-tree-key")).toBeGreaterThan(html.lastIndexOf("data-row"));
+	});
+
 	it("renders a manual row with data-manual and its chip and sentence", () => {
 		const [row, ...rest] = tagsWith(html, "data-row", "data-manual");
 		expect(rest).toEqual([]);

@@ -3,6 +3,7 @@ import type { Connector, Lane, Step } from "../../src/model/types";
 import FlowConnector from "../../src/tags/flow/flow-connector.marko";
 import StepNode from "../../src/tags/flow/step-node.marko";
 import Manual from "../fixtures/lane-manual.marko";
+import Ok from "../fixtures/lane-ok.marko";
 
 type Tag = { render(input: object): { toString(): string } };
 const render = (tag: unknown, input: object): string => (tag as Tag).render(input).toString();
@@ -76,6 +77,13 @@ describe("flow-connector", () => {
 		expect(edge).toContain("href=#demo/a~b");
 		expect(text(html)).toContain("The operator says go.");
 		expect(edge).toContain('aria-label="Title a to Title b (manual)"');
+	});
+
+	it("draws the manual mark as the person icon, with no question mark and no pill (AC-10)", () => {
+		const html = render(Manual, { view: "flow" });
+		expect(tagsWith(html, "data-icon=manual").length).toBeGreaterThan(0);
+		expect(html).not.toContain("data-ui-icon=help");
+		expect(html).not.toContain("conn-pill");
 	});
 
 	it("renders an arc without a label with no invented words", () => {
@@ -153,5 +161,28 @@ describe("step-node", () => {
 		const human = step("h", 1, { human: true });
 		expect(tagsWith(render(StepNode, { lane, step: human }), "data-human-marker")).toHaveLength(1);
 		expect(render(StepNode, { lane, step: lane.steps[0] })).not.toContain("data-human-marker");
+	});
+
+	it("shows the card as '<n> <Group>', with the person icon and not the word 'human' (AC-9)", () => {
+		const human = step("h", 1, { human: true, group: "build" });
+		const html = render(StepNode, { lane, step: human });
+		expect(text(html)).toContain("2 Build");
+		expect(text(html)).not.toMatch(/human/i);
+		expect(html).toContain("data-ui-icon=manual");
+	});
+
+	it("counts what runs a step in two badges, each a link to the panel with its label (AC-9)", () => {
+		const view = Ok as unknown as Tag;
+		const html = view.render({ view: "flow" }).toString();
+		const badges = tagsWith(html, "class=badge ");
+		expect(badges).toHaveLength(2);
+		expect(badges[0]).toContain('aria-label="Skills and Files: 1. Open First step"');
+		expect(badges[1]).toContain('aria-label="Tools and Hooks: 1. Open First step"');
+		for (const b of badges) expect(b).toContain("href=#demo/first");
+		// The floating list lists the names behind each count and is not shown without script.
+		expect(tagsWith(html, "badge-pop", "popover=manual")).toHaveLength(2);
+		expect(html).toMatch(/badge-pop-name>alpha</);
+		expect(html).toMatch(/badge-pop-name>run\.sh</);
+		expect(html).toContain("badge-pop-man");
 	});
 });

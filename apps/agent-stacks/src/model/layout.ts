@@ -24,6 +24,18 @@ export const BAND_BASE = 18;
 export const BAND_LANE = 24;
 
 /**
+ * A column holds one step card (13 px of margin each side, so the gap between two cards is 26 px).
+ * Columns share the width between the minimum and the maximum; the flow scrolls only below the minimum.
+ */
+export const COL_MIN = 144;
+export const COL_MAX = 202;
+
+/** The least width in px a lane of `steps` columns can be drawn in. */
+export function flowMinWidth(steps: number): number {
+	return steps * COL_MIN;
+}
+
+/**
  * A connector's class from its endpoints. The next step is `adjacent`; going to the same step is
  * `self`; a forward skip is `above`; a back edge is `below`. An `outer` connector is never
  * `adjacent` or `above`: it feeds the next piece of work, so it is drawn as a back edge.

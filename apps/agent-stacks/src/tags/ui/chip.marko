@@ -1,25 +1,34 @@
 export interface Input {
   content?: Marko.Body;
   /** An optional kind of chip, written as a data attribute for styling and tests. */
-  tone?: "manual" | "when";
+  tone?: "manual" | "when" | "one";
 }
 
 <span class="chip" data-chip=input.tone><${input.content}/></span>
 
 <style>
+  /* A filled chip: dark on light, light on dark; "when" and "manual" take the orange. */
   .chip {
     display: inline-block;
-    padding: 0 0.45rem;
-    border: 1px solid var(--line);
+    padding: 0 0.5rem;
+    border: 1px solid var(--fg);
     border-radius: 999px;
-    background: var(--sunk);
-    color: var(--muted);
-    font-size: 0.75rem;
-    line-height: 1.5;
+    background: var(--fg);
+    color: var(--surface);
+    font-size: 0.6875rem;
+    font-weight: 650;
+    line-height: 1.45;
     white-space: nowrap;
   }
+  .chip[data-chip="one"] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
+  }
+  .chip[data-chip="when"],
   .chip[data-chip="manual"] {
     border-color: var(--when-bg);
-    color: var(--fg);
+    background: var(--when-bg);
+    color: var(--when-fg);
   }
 </style>

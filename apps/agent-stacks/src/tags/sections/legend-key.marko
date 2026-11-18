@@ -46,7 +46,7 @@ static const ICON_KIND: Record<"file" | "code", Kind> = { file: "reference", cod
             <if=it.icon === "warning"><ui-icon id="warning"/></if>
             <if=it.icon === "file" || it.icon === "code"><kind-icon kind=ICON_KIND[it.icon]/></if>
             <if=it.line><i class="key-ln" data-line=it.line></i></if>
-            <if=it.line === "manual"><ui-icon id="manual"/></if>
+            <if=it.line === "manual"><i class="key-man" data-icon="manual"><ui-icon id="manual"/></i></if>
             <if=it.marker === "pick"><i class="key-pick" data-marker="pick"></i></if>
             <if=it.sample><i class="key-sample">${it.sample}</i></if>
             <span><${it.content}/></span>
@@ -136,6 +136,27 @@ static const ICON_KIND: Record<"file" | "code", Kind> = { file: "reference", cod
   .key-ln[data-line="dotted"] {
     border-top-style: dotted;
     border-top-width: 2px;
+  }
+  .key-ln[data-line="manual"] {
+    border-top-style: dashed;
+    border-top-color: var(--manual);
+  }
+  /* The manual mark: the person in an orange circle, as on the connector. */
+  .key-man {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    margin-left: -3px;
+    border-radius: 50%;
+    background: var(--manual);
+    color: var(--when-fg);
+  }
+  .key-man .ui-icon {
+    width: 10px;
+    height: 10px;
+    vertical-align: baseline;
   }
   .key-pick {
     flex: none;
