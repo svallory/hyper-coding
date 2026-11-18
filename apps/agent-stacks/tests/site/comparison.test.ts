@@ -56,6 +56,51 @@ describe("the comparison page", () => {
 		for (const a of links) expect(attr(a, "href")).toMatch(/#L\d+/);
 	});
 
+	it("shows the step panel as v13 does: no phrase line, What unlabelled, rows in v13's order", () => {
+		const panel = root.querySelector(
+			"[data-panel='step'][id='superpowers/implement-task']",
+		) as HTMLElement;
+		expect(panel.querySelector(".panel-phrase")).toBeNull();
+		expect(panel.querySelector(".panel-what")?.text.trim().length).toBeGreaterThan(0);
+		const labels = panel.querySelectorAll(".field-label").map((l) => l.text.trim());
+		expect(labels).not.toContain("What");
+		const v13 = ["Starts", "Who", "Via", "Input", "Output", "Gate", "Loops back"];
+		expect(labels.filter((l) => v13.includes(l))).toEqual(v13.filter((l) => labels.includes(l)));
+		expect(labels).toContain("Who");
+	});
+
+	it("ends each step panel with 'Leaves to', one entry per connector leaving it, and none without one", () => {
+		// A connector is drawn once as an edge, so its ends identify it; a label repeats the same ends.
+		const leaving = new Map<string, number>();
+		for (const lane of root.querySelectorAll("[data-lane]")) {
+			const ends = new Set(
+				lane.querySelectorAll("[data-connector]").map((c) => attr(c, "data-connector")),
+			);
+			for (const e of ends) {
+				const key = `${attr(lane, "id")}/${e.split("~")[0]}`;
+				leaving.set(key, (leaving.get(key) ?? 0) + 1);
+			}
+		}
+		let several = 0;
+		let none = 0;
+		for (const p of root.querySelectorAll("[data-panel='step']")) {
+			const id = attr(p, "id");
+			const n = leaving.get(id) ?? 0;
+			expect(p.querySelectorAll("[data-leaves] > li").length, id).toBe(n);
+			if (n === 0) {
+				none++;
+				expect(p.querySelector("[data-leaves]"), id).toBeNull();
+			}
+			if (n >= 2) several++;
+		}
+		expect(several).toBeGreaterThan(0);
+		expect(none).toBeGreaterThan(0);
+		const first = root.querySelector(
+			"[data-panel='step'][id='superpowers/implement-task'] [data-leaves] > li",
+		);
+		expect(first?.querySelector("b")?.text.trim().length).toBeGreaterThan(0);
+	});
+
 	it("gives each lane with a source one repository link at its pinned commit (AC-7)", () => {
 		const lanes = root.querySelectorAll("[data-lane]");
 		const linked = lanes.filter((l) => l.querySelector(".lane-head [data-lane-source]"));

@@ -61,6 +61,13 @@ export interface Input {
   :root:has(.side-panel[data-open]) .site-nav {
     right: var(--side-w);
   }
+  /* With the panel open the bar is narrower; tighter gaps keep every link readable at the default panel width. */
+  :root:has(.side-panel[data-open]) .top-in {
+    gap: 0.75rem;
+  }
+  :root:has(.side-panel[data-open]) .tl {
+    gap: 0.75rem;
+  }
   .top-in {
     max-width: 1320px;
     margin: 0 auto;

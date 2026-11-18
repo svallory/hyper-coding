@@ -39,6 +39,9 @@ export interface Input {
     align-items: stretch;
     gap: 1.125rem;
   }
+  :root:has(.side-panel[data-open]) .nav-group {
+    gap: 0.75rem;
+  }
   .site-nav .sep {
     flex: none;
     width: 1px;
