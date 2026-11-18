@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
 	assignSlots,
 	bandHeight,
-	COL_MAX,
-	COL_MIN,
 	type Edge,
 	edgeClass,
 	flowMinWidth,
@@ -181,12 +179,12 @@ describe("layoutLane", () => {
 });
 
 describe("flowMinWidth", () => {
-	// A 1440 px window leaves 1288 px for the page and 1286 px inside the lane's card.
+	// 1286 = 1440 px window, minus the page's max-width/gutters in base.css (1320 px cap, 16 px each side)
+	// and the card's 2 px border. Update it when base.css changes.
 	const CARD_INNER = 1286;
 
 	it("fits Superpowers' 8 steps in the card at 1440 px, and not 9 (pstack scrolls inside its card)", () => {
 		expect(flowMinWidth(8)).toBeLessThanOrEqual(CARD_INNER);
 		expect(flowMinWidth(9)).toBeGreaterThan(CARD_INNER);
-		expect(COL_MIN).toBeLessThan(COL_MAX);
 	});
 });

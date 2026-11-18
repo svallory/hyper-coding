@@ -118,7 +118,7 @@ export interface Input {
   }
   .conn:has([data-outer]) .conn-edge::before { border-top-style: dashed; }
   .conn:has([data-inferred]) .conn-edge::before { border-top-style: dotted; border-top-width: 2px; }
-  .conn:has([data-manual]) .conn-edge::before { border-top-style: dashed; }
+  .conn:has([data-manual]):not(:has([data-inferred])) .conn-edge::before { border-top-style: dashed; }
   .conn[data-shape="adjacent"] .conn-label {
     position: absolute;
     top: calc(50% + 0.6rem);
@@ -157,7 +157,7 @@ export interface Input {
   .conn:has([data-inferred]) .conn-path { border-style: dotted; border-width: 2px 2px 0; }
   .conn:has([data-inferred])[data-shape="below"] .conn-path,
   .conn:has([data-inferred])[data-shape="self"] .conn-path { border-width: 0 2px 2px; }
-  .conn:has([data-manual]) .conn-path { border-style: dashed; }
+  .conn:has([data-manual]):not(:has([data-inferred])) .conn-path { border-style: dashed; }
   /* The arrowhead sits on the leg that arrives at the step. */
   .conn-path::after {
     content: "";
