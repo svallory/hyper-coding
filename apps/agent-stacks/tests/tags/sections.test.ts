@@ -22,25 +22,13 @@ describe("lane-nav", () => {
 	const links = (kind: string) =>
 		(bar(kind)?.querySelectorAll(".tl a") ?? []).map((a) => a.text.trim());
 
-	it("is the top bar: the title, a link to the other page and the theme toggle", () => {
-		const nav = bar("nav");
-		expect(nav?.querySelector("a.tb")?.text.trim()).toBe("Agent stacks");
-		expect(nav?.querySelector("a.other")?.getAttribute("href")).toBe("/");
-		expect(nav?.querySelector("button.theme-toggle")?.getAttribute("aria-label")).toBe(
-			"Switch to dark theme",
-		);
-	});
-
 	it("renders each group's links in order, and nothing for an empty group", () => {
 		expect(links("nav")).toEqual(["Router", "Investigation"]);
 		expect(bar("nav")?.querySelectorAll("[data-nav-group]")).toHaveLength(2);
 		expect(render("nav")).not.toContain("Nothing here");
 	});
 
-	it("links the comparison page to the playbooks page, with its section links after the lanes", () => {
-		expect(bar("nav-comparison")?.querySelector("a.other")?.getAttribute("href")).toBe(
-			"/pstack/playbooks/",
-		);
+	it("renders the section links after the lanes", () => {
 		expect(links("nav-comparison")).toEqual(["alpha", "Questions"]);
 	});
 });

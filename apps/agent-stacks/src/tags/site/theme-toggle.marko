@@ -26,7 +26,9 @@
     } catch {}
     sync();
   }, { signal: $signal });
-  new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+  const watch = new MutationObserver(sync);
+  watch.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+  $signal.addEventListener("abort", () => watch.disconnect());
   mq.addEventListener("change", sync, { signal: $signal });
 </script>
 
