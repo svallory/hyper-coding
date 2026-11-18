@@ -154,6 +154,8 @@ export interface Input {
     }
     const t = targetOf(e.target);
     if (!t) {
+      // Selecting text to copy it is not a release.
+      if (pinned && getSelection()?.isCollapsed === false) return;
       if (pinned && !outsideRelease(e.target)) return;
       if (pinned) {
         release();
