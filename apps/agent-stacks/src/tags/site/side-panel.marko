@@ -182,7 +182,7 @@ export interface Input {
       render();
     }
     if (scroll) {
-      document.querySelector<HTMLElement>(`a[aria-current]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      document.querySelector<HTMLElement>("a[aria-current]:is([data-step], [data-connector])")?.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
   };
   fromAddress(true);

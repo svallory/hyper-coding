@@ -6,7 +6,7 @@ export default defineConfig({
 	plugins: [marko({ linked: false })],
 	test: {
 		environment: "node",
-		// Tests read stylesheets as text (`?raw`), so `vitest related` can select them.
+		// Vitest turns CSS imports into empty modules unless css.include matches, so a `?raw` import would read "".
 		css: { include: /\.css\?raw$/ },
 		include: ["tests/**/*.test.ts"],
 	},
