@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { type HTMLElement, type Node, parse } from "node-html-parser";
 import { describe, expect, it } from "vitest";
 import { PAGES, type PageName, pageFile } from "../../scripts/lib/read-site";
-import { FALLBACK_INNER } from "../../src/components/ui/icon/render";
 
 const dist = new URL("../../dist/public", import.meta.url).pathname;
 const names = Object.keys(PAGES) as PageName[];
@@ -253,7 +252,12 @@ describe.each(names)("the %s page", (page) => {
 			"Moon",
 			"Sun",
 		]);
-		expect(svgs.filter((s) => s.innerHTML.trim() === FALLBACK_INNER)).toEqual([]);
+		// the placeholder is matched in the raw HTML, not in the re-serialised DOM
+		const raw = readFileSync(pageFile(dist, page), "utf8");
+		const placeholder =
+			/<svg[^>]*data-icon-name[^>]*>\s*<rect width="18" height="18" x="3" y="3" rx="2"\s*\/?>\s*<\/svg>/;
+		expect(raw).not.toMatch(placeholder);
+		expect(raw.match(/<svg[^>]*data-icon-name/g)?.length).toBeGreaterThan(0);
 	});
 
 	it("ships no client code for icons", () => {
@@ -262,8 +266,8 @@ describe.each(names)("the %s page", (page) => {
 			...root.querySelectorAll("link[rel=modulepreload]").map((e) => attr(e, "href")),
 		];
 		const code = scripts.map((u) => readFileSync(join(dist, u), "utf8")).join("\n");
-		expect(code).not.toMatch(
-			/client-swap|resolve-client|loadClientIconInner|resolveClientIconInner/,
-		);
+		// the Lucide map (drawings of Book, Bot, TerminalSquare) must not reach the browser
+		for (const drawing of ["M4 19.5v-15A2.5", "M12 8V4H8", "m7 11 2-2-2-2", "M12 5v16"])
+			expect(code).not.toContain(drawing);
 	});
 });
