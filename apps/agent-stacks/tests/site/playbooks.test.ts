@@ -20,4 +20,17 @@ describe("the playbooks page", () => {
 			.filter((id) => !lanes.has(id));
 		expect(broken).toEqual([]);
 	});
+
+	it("lists a step's rows in v13's order, with no What label and no phrase line", () => {
+		// No playbook step carries a Via row, so this pins the labels and order of the rows it does have.
+		const panel = doc.querySelector("[data-panel='step'][id='router/run-playbook']");
+		expect(panel?.querySelectorAll(".field-label").map((l) => l.text.trim())).toEqual([
+			"Who",
+			"Input",
+			"Output",
+			"Gate",
+			"Hands off to",
+		]);
+		expect(panel?.querySelector(".panel-phrase")).toBeNull();
+	});
 });

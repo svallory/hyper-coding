@@ -6,7 +6,7 @@ export interface Input {
 }
 
 static const LABELS = {
-  via: "Via",
+  via: "Runs via",
   actor: "Who",
   input: "Input",
   output: "Output",
@@ -27,7 +27,6 @@ static const ENFORCED = {
 <const/step=input.step/>
 <const/id=`${lane.id}/${step.id}`/>
 <const/leaves=lane.connectors.filter((c) => lane.steps[c.from] === step)/>
-<const/names=lane.steps/>
 <const/position=lane.steps.findIndex((s) => s.id === step.id) + 1/>
 <section class="panel" id=id data-panel="step" data-group=step.group aria-label=step.title>
   <header class="panel-head">
@@ -60,7 +59,7 @@ static const ENFORCED = {
         <ul class="leaves" data-leaves>
           <for|c| of=leaves>
             <li class="leave">
-              <b>${c.from === c.to ? "itself" : names[c.to].title}<if=c.label> · ${c.label}</if></b>
+              <b>${c.from === c.to ? "itself" : lane.steps[c.to].title}<if=c.label> · ${c.label}</if></b>
               <if=c.details.when>: <${c.details.when}/></if>
               <if=c.manual><span class="by"> Manual: the operator has to start it.</span></if>
               <if=c.details.by>

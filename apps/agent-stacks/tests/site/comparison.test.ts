@@ -64,9 +64,7 @@ describe("the comparison page", () => {
 		expect(panel.querySelector(".panel-what")?.text.trim().length).toBeGreaterThan(0);
 		const labels = panel.querySelectorAll(".field-label").map((l) => l.text.trim());
 		expect(labels).not.toContain("What");
-		const v13 = ["Starts", "Who", "Via", "Input", "Output", "Gate", "Loops back"];
-		expect(labels.filter((l) => v13.includes(l))).toEqual(v13.filter((l) => labels.includes(l)));
-		expect(labels).toContain("Who");
+		expect(labels).toEqual(["Starts", "Who", "Runs via", "Input", "Output", "Gate", "Loops back"]);
 	});
 
 	it("ends each step panel with 'Leaves to', one entry per connector leaving it, and none without one", () => {
@@ -81,7 +79,6 @@ describe("the comparison page", () => {
 				leaving.set(key, (leaving.get(key) ?? 0) + 1);
 			}
 		}
-		let several = 0;
 		let none = 0;
 		for (const p of root.querySelectorAll("[data-panel='step']")) {
 			const id = attr(p, "id");
@@ -91,14 +88,25 @@ describe("the comparison page", () => {
 				none++;
 				expect(p.querySelector("[data-leaves]"), id).toBeNull();
 			}
-			if (n >= 2) several++;
 		}
-		expect(several).toBeGreaterThan(0);
 		expect(none).toBeGreaterThan(0);
-		const first = root.querySelector(
+	});
+
+	it("lists Implement task's three outgoing connectors in flow order, with the decision line", () => {
+		const entries = root.querySelectorAll(
 			"[data-panel='step'][id='superpowers/implement-task'] [data-leaves] > li",
 		);
-		expect(first?.querySelector("b")?.text.trim().length).toBeGreaterThan(0);
+		expect(entries.map((li) => li.querySelector("b")?.text.trim())).toEqual([
+			"Task review",
+			"Whole-branch review · inline mode: no task review",
+			"itself · blocked",
+		]);
+		expect(entries[0].text).toContain(
+			"Decided by model; enforced by prompt text only; nothing checks.",
+		);
+		expect(entries[1].text).toContain(
+			"Decided by human; enforced by prompt text only; nothing checks.",
+		);
 	});
 
 	it("gives each lane with a source one repository link at its pinned commit (AC-7)", () => {
