@@ -1,24 +1,14 @@
+import Icon from "../../components/ui/icon/icon.marko";
+
 export interface Input {
   /** warning: a triangle; manual: a person (a human decides or starts this); help: a question mark. */
   id: "warning" | "manual" | "help";
 }
 
+static const LUCIDE = { warning: "TriangleAlertIcon", manual: "User", help: "CircleHelpIcon" } as const;
+
 <span class="ui-icon" data-ui-icon=input.id aria-hidden="true">
-  <if=input.id === "manual">
-    <svg viewBox="0 0 12 12" fill="currentColor"><path d="M6 5.4a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M2.1 10.9c.3-2.3 1.8-3.6 3.9-3.6s3.6 1.3 3.9 3.6z"/></svg>
-  </if>
-  <else>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <if=input.id === "warning">
-        <path d="M12 3 2 20h20z"/>
-        <path d="M12 10v4M12 17.5v.5"/>
-      </if>
-      <else>
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17v.5"/>
-      </else>
-    </svg>
-  </else>
+  <Icon name=LUCIDE[input.id] unsized/>
 </span>
 
 <style>
