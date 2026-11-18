@@ -88,15 +88,17 @@ describe.each(names)("the %s page", (page) => {
 	});
 
 	it("links every badge list item to its step, and its row in that step's tree by id", () => {
-		const bad: string[] = [];
+		// Indexed once: a selector per item over the whole page is slow on a busy CI runner.
+		const panels = new Set(root.querySelectorAll("[data-panel='step']").map((p) => attr(p, "id")));
+		const rows = new Set(root.querySelectorAll("[data-row][id]").map((r) => attr(r, "id")));
 		const items = root.querySelectorAll(".badge-pop-item");
 		expect(items.length).toBeGreaterThan(0);
+		const bad: string[] = [];
 		for (const a of items) {
 			const step = attr(a, "href").slice(1);
-			const panel = root.querySelector(`[data-panel="step"][id="${step}"]`);
 			const rid = attr(a, "data-row");
-			if (!panel) bad.push(`${attr(a, "href")} has no step panel`);
-			else if (!rid.startsWith(`${step}:row:`) || !panel.querySelector(`[data-row][id="${rid}"]`))
+			if (!panels.has(step)) bad.push(`${attr(a, "href")} has no step panel`);
+			else if (!rid.startsWith(`${step}:row:`) || !rows.has(rid))
 				bad.push(`${step}: no row ${rid}`);
 		}
 		expect(bad).toEqual([]);
