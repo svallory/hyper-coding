@@ -147,10 +147,13 @@ describe.each(names)("the %s page", (page) => {
 		expect(attr(close as HTMLElement, "href")).toBe("#side");
 		expect(attr(close as HTMLElement, "aria-label")).toBe("Close details panel");
 		expect(close?.querySelector("kbd")?.text.trim()).toBe("esc");
+		expect(attr(close as HTMLElement, "data-slot")).toBe("button");
 	});
 
 	it("shows the Esc key of the how paragraph as a <kbd>", () => {
-		expect(root.querySelector("p.how kbd")?.text.trim()).toBe("Esc");
+		const key = root.querySelector("p.how kbd");
+		expect(key?.text.trim()).toBe("Esc");
+		expect(attr(key as HTMLElement, "data-slot")).toBe("kbd");
 	});
 
 	it("words the pinned header as bold text to release by unselecting the node", () => {
