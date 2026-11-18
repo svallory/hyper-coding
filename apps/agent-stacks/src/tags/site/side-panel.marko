@@ -82,10 +82,11 @@ export interface Input {
       else a.removeAttribute("aria-current");
     }
   };
-  const fill = (panel: HTMLElement) => {
+  const fill = (panel: HTMLElement, force?: string) => {
     shown = panel;
     pop.scrollTop = 0;
-    const tab = read(KEYS.tab);
+    // A badge asks for its tab (Anatomy); that is not the reader's choice, so it is not remembered.
+    const tab = force ?? read(KEYS.tab);
     const radio = tab && panel.querySelector<HTMLInputElement>(`input[data-tab="${tab}"]`);
     if (radio) radio.checked = true;
   };
@@ -93,18 +94,18 @@ export interface Input {
     pinned = null;
     addressFor(null);
   };
-  const peek = (panel: HTMLElement) => {
+  const peek = (panel: HTMLElement, tab?: string) => {
     if (pinned || dismissed) return;
     if (shown === panel && aside.hasAttribute("data-open")) return;
-    fill(panel);
+    fill(panel, tab);
     render();
   };
-  const pin = (panel: HTMLElement) => {
+  const pin = (panel: HTMLElement, tab?: string) => {
     const was = pinned === panel.id;
     release();
     dismissed = false;
     if (!was) {
-      fill(panel);
+      fill(panel, tab);
       pinned = panel.id;
       addressFor(panel.id);
     }
@@ -124,11 +125,11 @@ export interface Input {
   document.addEventListener("pointerover", (e) => {
     if ((e as PointerEvent).pointerType && (e as PointerEvent).pointerType !== "mouse") return;
     const t = targetOf(e.target);
-    if (t && !aside.contains(t.link)) peek(t.panel);
+    if (t && !aside.contains(t.link)) peek(t.panel, t.link.dataset.openTab);
   }, { signal: $signal });
   document.addEventListener("focusin", (e) => {
     const t = targetOf(e.target);
-    if (t && !aside.contains(t.link)) peek(t.panel);
+    if (t && !aside.contains(t.link)) peek(t.panel, t.link.dataset.openTab);
   }, { signal: $signal });
   document.addEventListener("click", (e) => {
     const me = e as MouseEvent;
@@ -145,6 +146,28 @@ export interface Input {
     if (aside.contains(t.link)) {
       if (pinned !== t.panel.id) pin(t.panel);
     } else pin(t.panel);
+  }, { signal: $signal });
+  // A step card's badge or one of its list items: show the step on its Anatomy tab, pinned (never released
+  // by this), and for an item open the rows above its row, scroll it into view and highlight it.
+  document.addEventListener("panel-row", (e) => {
+    const { href, row } = (e as CustomEvent<{ href: string | null; row: string | null }>).detail;
+    const panel = panelFor(href);
+    if (!panel) return;
+    if (pinned !== panel.id) pin(panel, "anatomy");
+    else {
+      const radio = panel.querySelector<HTMLInputElement>("input[data-tab='anatomy']");
+      if (radio) radio.checked = true;
+    }
+    const target = row ? document.getElementById(row) : null;
+    if (!target || !panel.contains(target)) return;
+    for (let d = target.parentElement?.closest("details"); d; d = d.parentElement?.closest("details")) d.open = true;
+    const box = pop.getBoundingClientRect();
+    const at = target.getBoundingClientRect();
+    pop.scrollTop += at.top - box.top - Math.max(0, (pop.clientHeight - at.height) / 3);
+    target.classList.remove("is-hit");
+    void target.offsetWidth;
+    target.classList.add("is-hit");
+    target.addEventListener("animationend", () => target.classList.remove("is-hit"), { once: true });
   }, { signal: $signal });
   // A link is not a button: Space presses it too.
   document.addEventListener("keydown", (e) => {
