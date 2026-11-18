@@ -25,7 +25,7 @@ static const ENFORCED = {
 <const/lane=input.lane/>
 <const/step=input.step/>
 <const/id=`${lane.id}/${step.id}`/>
-<const/leaves=lane.connectors.filter((c) => lane.steps[c.from] === step)/>
+<const/leaves=lane.connectors.filter((c) => lane.steps[c.from] === step && (c.label || Object.keys(c.details).length > 0))/>
 <const/position=lane.steps.findIndex((s) => s.id === step.id) + 1/>
 <section class="panel" id=id data-panel="step" data-group=step.group aria-label=step.title>
   <header class="panel-head">

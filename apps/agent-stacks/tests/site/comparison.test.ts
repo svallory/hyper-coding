@@ -67,29 +67,16 @@ describe("the comparison page", () => {
 		expect(labels).toEqual(["Starts", "Who", "Runs via", "Input", "Output", "Gate", "Loops back"]);
 	});
 
-	it("ends each step panel with 'Leaves to', one entry per connector leaving it, and none without one", () => {
-		// A connector is drawn once as an edge, so its ends identify it; a label repeats the same ends.
-		const leaving = new Map<string, number>();
-		for (const lane of root.querySelectorAll("[data-lane]")) {
-			const ends = new Set(
-				lane.querySelectorAll("[data-connector]").map((c) => attr(c, "data-connector")),
-			);
-			for (const e of ends) {
-				const key = `${attr(lane, "id")}/${e.split("~")[0]}`;
-				leaving.set(key, (leaving.get(key) ?? 0) + 1);
-			}
-		}
-		let none = 0;
-		for (const p of root.querySelectorAll("[data-panel='step']")) {
-			const id = attr(p, "id");
-			const n = leaving.get(id) ?? 0;
-			expect(p.querySelectorAll("[data-leaves] > li").length, id).toBe(n);
-			if (n === 0) {
-				none++;
-				expect(p.querySelector("[data-leaves]"), id).toBeNull();
-			}
-		}
-		expect(none).toBeGreaterThan(0);
+	it("lists under 'Leaves to' only the connectors with a label or details, as v13 does", () => {
+		const step = (id: string) =>
+			root.querySelector(`[data-panel='step'][id='${id}']`) as HTMLElement;
+		// Labelled connectors: the section is there.
+		expect(step("superpowers/implement-task").querySelector("[data-leaves]")).not.toBeNull();
+		// A connector leaves this step, but it has neither label nor details: no section, no heading.
+		const bare = step("hyper/define");
+		expect(root.querySelectorAll("#hyper [data-connector^='define~']").length).toBeGreaterThan(0);
+		expect(bare.querySelector("[data-leaves]")).toBeNull();
+		expect(bare.text).not.toContain("Leaves to");
 	});
 
 	it("lists Implement task's three outgoing connectors in flow order, with the decision line", () => {
