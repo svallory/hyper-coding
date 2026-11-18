@@ -149,6 +149,7 @@ export interface Input {
   }, { signal: $signal });
   // A step card's badge or one of its list items: show the step on its Anatomy tab, pinned (never released
   // by this), and for an item open the rows above its row, scroll it into view and highlight it.
+  const hitTimers = new WeakMap<Element, number>();
   document.addEventListener("panel-row", (e) => {
     const { href, row } = (e as CustomEvent<{ href: string | null; row: string | null }>).detail;
     const panel = panelFor(href);
@@ -167,7 +168,15 @@ export interface Input {
     target.classList.remove("is-hit");
     void target.offsetWidth;
     target.classList.add("is-hit");
-    target.addEventListener("animationend", () => target.classList.remove("is-hit"), { once: true });
+    // One timer per row, the length of the highlight; it also covers reduced motion, where nothing animates.
+    clearTimeout(hitTimers.get(target));
+    hitTimers.set(target, window.setTimeout(() => target.classList.remove("is-hit"), 1500));
+    // The list that held the focus is gone: keep the keyboard user's place on the row.
+    const focusable = target.matches("details")
+      ? target.querySelector<HTMLElement>(":scope > summary")
+      : (target.querySelector<HTMLElement>("a, summary") ?? target);
+    if (focusable === target && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+    focusable?.focus({ preventScroll: true });
   }, { signal: $signal });
   // A link is not a button: Space presses it too.
   document.addEventListener("keydown", (e) => {
