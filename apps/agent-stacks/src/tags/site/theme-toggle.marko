@@ -1,15 +1,14 @@
+import Icon from "../../components/ui/icon/icon.marko";
 import Button from "../../components/ui/button/button.marko";
 <id/toggleId/>
 <Button id=toggleId class="theme-toggle" variant="outline" size="icon-sm" type="button" aria-label="Switch to dark theme" title="Switch to dark theme">
-  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M10.2 7.4A4.6 4.6 0 0 1 4.6 1.8a4.6 4.6 0 1 0 5.6 5.6z"/></svg>
+  <Icon name="Moon" unsized aria-hidden="true" class="toggle-moon"/>
+  <Icon name="Sun" unsized aria-hidden="true" class="toggle-sun"/>
 </Button>
 
 <script>
   const root = document.documentElement;
   const mq = matchMedia("(prefers-color-scheme: dark)");
-  const SUN =
-    "M6 3.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z M6 .8v1.2 M6 10v1.2 M.8 6H2 M10 6h1.2 M2.3 2.3l.9.9 M8.8 8.8l.9.9 M2.3 9.7l.9-.9 M8.8 3.2l.9-.9";
-  const MOON = "M10.2 7.4A4.6 4.6 0 0 1 4.6 1.8a4.6 4.6 0 1 0 5.6 5.6z";
   const isDark = () => (root.dataset.theme ? root.dataset.theme === "dark" : mq.matches);
   // The icon shows what a click switches to: a sun in the dark theme, a moon in the light one.
   const button = () => document.getElementById(toggleId) as HTMLButtonElement;
@@ -18,7 +17,6 @@ import Button from "../../components/ui/button/button.marko";
     const label = `Switch to ${dark ? "light" : "dark"} theme`;
     button().setAttribute("aria-label", label);
     button().title = label;
-    button().querySelector("path")?.setAttribute("d", dark ? SUN : MOON);
   };
   sync();
   button().addEventListener("click", () => {
@@ -54,10 +52,20 @@ import Button from "../../components/ui/button/button.marko";
   .theme-toggle svg {
     width: 16px;
     height: 16px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.1;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+  }
+  .theme-toggle .toggle-sun,
+  :root[data-theme="dark"] .theme-toggle .toggle-moon {
+    display: none;
+  }
+  :root[data-theme="dark"] .theme-toggle .toggle-sun {
+    display: block;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .theme-toggle .toggle-moon {
+      display: none;
+    }
+    :root:not([data-theme]) .theme-toggle .toggle-sun {
+      display: block;
+    }
   }
 </style>

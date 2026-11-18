@@ -1,3 +1,4 @@
+import Icon from "../../components/ui/icon/icon.marko";
 import type { Kind } from "../../model/types";
 
 export interface Item {
@@ -40,7 +41,7 @@ static const ICON_KIND: Record<"file" | "code", Kind> = { file: "reference", cod
             </else-if>
             <if=it.icon === "human">
               <i class="key-human" data-icon="human">
-                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 5.4a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M2.1 10.9c.3-2.3 1.8-3.6 3.9-3.6s3.6 1.3 3.9 3.6z"/></svg>
+                <Icon name="User" unsized/>
               </i>
             </if>
             <if=it.icon === "warning"><ui-icon id="warning"/></if>
@@ -121,7 +122,6 @@ static const ICON_KIND: Record<"file" | "code", Kind> = { file: "reference", cod
   .key-human svg {
     width: 14px;
     height: 14px;
-    fill: currentColor;
     display: block;
   }
   .key-ln {

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { type HTMLElement, type Node, parse } from "node-html-parser";
 import { describe, expect, it } from "vitest";
 import { PAGES, type PageName, pageFile } from "../../scripts/lib/read-site";
+import { FALLBACK_INNER } from "../../src/components/ui/icon/render";
 
 const dist = new URL("../../dist/public", import.meta.url).pathname;
 const names = Object.keys(PAGES) as PageName[];
@@ -217,5 +218,52 @@ describe.each(names)("the %s page", (page) => {
 			...root.querySelectorAll("img[src]").map((e) => attr(e, "src")),
 		];
 		expect(urls.filter((u) => !/^\/(?!\/)/.test(u))).toEqual([]);
+	});
+
+	it("draws every icon with marko-ui's Icon (Lucide), one name per kind, never the placeholder", () => {
+		const svgs = root.querySelectorAll("svg");
+		expect(svgs.length).toBeGreaterThan(0);
+		expect(
+			svgs.filter((s) => attr(s, "data-icon-library") !== "lucide" || !attr(s, "data-icon-name")),
+		).toEqual([]);
+		const name = (el: HTMLElement) =>
+			attr(el.querySelector("svg") as HTMLElement, "data-icon-name");
+		const byKind: Record<string, string> = {
+			skill: "Book",
+			agent: "BotIcon",
+			hook: "TerminalSquareIcon",
+			file: "FileTextIcon",
+			code: "CodeIcon",
+		};
+		const kindIcons = root.querySelectorAll(".kind-icon");
+		expect(kindIcons.length).toBeGreaterThan(0);
+		expect(kindIcons.filter((k) => name(k) !== byKind[attr(k, "data-icon")])).toEqual([]);
+		const ui: Record<string, string> = {
+			warning: "TriangleAlertIcon",
+			manual: "User",
+			help: "CircleHelpIcon",
+		};
+		expect(
+			root
+				.querySelectorAll("[data-ui-icon]")
+				.filter((k) => name(k) !== ui[attr(k, "data-ui-icon")]),
+		).toEqual([]);
+		const toggle = root.querySelector("button.theme-toggle") as HTMLElement;
+		expect(toggle.querySelectorAll("svg").map((s) => attr(s, "data-icon-name"))).toEqual([
+			"Moon",
+			"Sun",
+		]);
+		expect(svgs.filter((s) => s.innerHTML.trim() === FALLBACK_INNER)).toEqual([]);
+	});
+
+	it("ships no client code for icons", () => {
+		const scripts = [
+			...root.querySelectorAll("script[src]").map((e) => attr(e, "src")),
+			...root.querySelectorAll("link[rel=modulepreload]").map((e) => attr(e, "href")),
+		];
+		const code = scripts.map((u) => readFileSync(join(dist, u), "utf8")).join("\n");
+		expect(code).not.toMatch(
+			/client-swap|resolve-client|loadClientIconInner|resolveClientIconInner/,
+		);
 	});
 });

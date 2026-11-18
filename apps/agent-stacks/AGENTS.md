@@ -6,7 +6,7 @@
 marko-ui (<https://marko-ui.saulo.tech>) — shadcn-style components for Marko 6,
 installed as source under `ui/`: your files, edit them directly.
 
-Installed: `button`, `kbd`
+Installed: `button`, `icon`, `kbd`
 
 Use the CLI rather than guessing an API or writing a component the registry
 ships (`bunx marko-ui`):
