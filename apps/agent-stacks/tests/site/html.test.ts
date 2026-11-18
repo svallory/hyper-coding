@@ -247,6 +247,12 @@ describe.each(names)("the %s page", (page) => {
 				.querySelectorAll("[data-ui-icon]")
 				.filter((k) => name(k) !== ui[attr(k, "data-ui-icon")]),
 		).toEqual([]);
+		const human = root.querySelector('[data-icon="human"]');
+		if (human) expect(name(human)).toBe("User");
+		// an icon is decoration: hidden itself or inside a hidden ancestor
+		expect(
+			svgs.filter((s) => attr(s, "aria-hidden") !== "true" && !s.closest("[aria-hidden=true]")),
+		).toEqual([]);
 		const toggle = root.querySelector("button.theme-toggle") as HTMLElement;
 		expect(toggle.querySelectorAll("svg").map((s) => attr(s, "data-icon-name"))).toEqual([
 			"Moon",
