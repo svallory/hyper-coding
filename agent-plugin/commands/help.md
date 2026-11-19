@@ -60,6 +60,7 @@ description; each can also be named directly (the plugin namespace is
 | `unit` | run one briefed unit through the dev-review driver, or continue a parked one |
 | `land` | merge a READY unit and tear down its agents, panes and worktree; or abandon it |
 | `auto` | `auto on`: the lead rules instead of asking; `auto off`: review the rulings |
+| `canvas` | draw a diagram on the user's Canvas (the `canvas` MCP server and local service), keep it as a file in a project, answer the comments left on it |
 
 Hooks (automatic): SessionStart context injection inside a space; per-edit
 check hook and new-dependency friction hook, both opt-in via
