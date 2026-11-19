@@ -9,9 +9,12 @@
 #       write notes/auto.json {since, first_ruling}; an existing file is kept and printed
 #   ship-auto next [--rulings FILE]
 #       print the next ruling number (max existing + 1)
-#   ship-auto questions [--markdown] [--out FILE] [--rulings FILE]
+#   ship-auto questions [--markdown] [--drop IDS] [--out FILE] [--rulings FILE]
 #       papiro questions JSON for the pending auto rulings (--markdown: the same list
-#       as markdown, for a session without papiro)
+#       as markdown, for a session without papiro). --drop "D12 D15" (spaces or commas)
+#       leaves those rulings off; they stay pending, so apply confirms them like any
+#       ruling the reply does not name. An id that is not pending exits 1; dropping
+#       every pending ruling exits 4 with nothing written.
 #   ship-auto apply REPLY|- [--rulings FILE]
 #       apply a papiro reply (or the markdown fallback) to the rulings file
 #
@@ -65,11 +68,12 @@ fi
 cmd="$1"; shift
 case "$cmd" in on|next|questions|apply) ;; *) usage "unknown subcommand $cmd" ;; esac
 
-rulings_arg="" out="" arg="" markdown=0
+rulings_arg="" out="" arg="" markdown=0 drop=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --rulings) [[ $# -ge 2 ]] || usage "--rulings needs a value"; rulings_arg="$2"; shift 2 ;;
     --out) [[ "$cmd" == questions ]] || usage "--out is only for questions"; [[ $# -ge 2 ]] || usage "--out needs a value"; out="$2"; shift 2 ;;
+    --drop) [[ "$cmd" == questions ]] || usage "--drop is only for questions"; [[ $# -ge 2 ]] || usage "--drop needs a value"; drop="$2"; shift 2 ;;
     --markdown) [[ "$cmd" == questions ]] || usage "--markdown is only for questions"; markdown=1; shift ;;
     -) [[ "$cmd" == apply && -z "$arg" ]] || usage "unexpected argument -"; arg="-"; shift ;;
     -*) usage "unknown option $1" ;;
@@ -157,6 +161,18 @@ case "$cmd" in
     pend="$(pending_json)"
     if [[ "$(jq 'length' <<<"$pend")" -eq 0 ]]; then
       echo "ship-auto: no pending-review rulings" >&2; exit 3
+    fi
+    if [[ -n "${drop//[[:space:],]/}" ]]; then
+      ids="$(printf '%s' "$drop" | tr ',' ' ' | xargs -n1 | sed -E 's/^[dD]//')"
+      unknown=""
+      for id in $ids; do
+        if ! [[ "$id" =~ ^[0-9]+$ ]] || ! jq -e --argjson n "$id" 'any(.[]; .n == $n)' <<<"$pend" >/dev/null; then unknown="$unknown D${id}"; fi
+      done
+      [[ -z "$unknown" ]] || fail "--drop names rulings that are not pending:$unknown"
+      pend="$(jq --arg ids "$ids" '($ids | split("\n") | map(tonumber)) as $off | map(select(.n as $n | $off | index($n) | not))' <<<"$pend")"
+      if [[ "$(jq 'length' <<<"$pend")" -eq 0 ]]; then
+        echo "ship-auto: every pending ruling was dropped; nothing for the sheet" >&2; exit 4
+      fi
     fi
     if [[ $markdown -eq 1 ]]; then
       text="$(jq -r '

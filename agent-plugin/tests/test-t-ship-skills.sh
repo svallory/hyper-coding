@@ -183,6 +183,23 @@ else
   assert_ok "papiro wrote the page" test -s "$FIX/q.html"
 fi
 
+# --drop: rulings that no longer need the operator are left off the sheet (they stay pending for apply)
+qd() { "$AUTO" questions --rulings "$rf" "$@" 2>"$FIX/qd.err"; }
+assert_eq "--drop D4: the sheet has D3 D5" "D3 D5" "$(qd --drop D4 | jq -r '[.groups[].questions[].id] | join(" ")')"
+assert_eq "--drop takes spaces, commas and a bare number" "D4" "$(qd --drop 'D3, 5' | jq -r '[.groups[].questions[].id] | join(" ")')"
+assert_eq "an empty --drop keeps every ruling" "3" "$(qd --drop '' | jq '[.groups[].questions[]] | length')"
+assert_eq "--drop with --markdown leaves the ruling out of the list" "D3 D5" \
+  "$(qd --markdown --drop D4 | sed -n 's/^### \(D[0-9]*\) .*/\1/p' | paste -sd' ' -)"
+assert_eq "--drop of a ruling that is not pending: exit 1" "1" "$(qd --drop D1 >/dev/null; echo $?)"
+assert_contains "...naming it" "$(cat "$FIX/qd.err")" "not pending: D1"
+assert_eq "--drop of a ruling outside the auto stretch (D2) is refused too" "1" "$(qd --drop D2 >/dev/null; echo $?)"
+assert_eq "--drop of garbage: exit 1" "1" "$(qd --drop Dx >/dev/null; echo $?)"
+assert_eq "--drop of every pending ruling: exit 4" "4" "$(qd --drop 'D3 D4 D5' --out "$FIX/qd.json" >/dev/null; echo $?)"
+assert_eq "...and nothing written" "no" "$([[ -e "$FIX/qd.json" ]] && echo yes || echo no)"
+assert_eq "--drop needs a value (64)" "64" "$("$AUTO" questions --rulings "$rf" --drop >/dev/null 2>&1; echo $?)"
+assert_eq "--drop outside questions is a usage error (64)" "64" "$("$AUTO" next --rulings "$rf" --drop D3 >/dev/null 2>&1; echo $?)"
+assert_eq "--drop leaves the rulings file alone" "3" "$(grep -c '^Status: pending-review' "$rf" | awk '{print $1 - 1}')"
+
 assert_fails "questions exits 3 when nothing is pending" bash -c "SHIP_SPACE_ROOT='$space' '$AUTO' questions --rulings '$FIX/none.md'"
 
 # apply a papiro-shaped reply: D3 takes alternative 2, D4 is overturned with a note, D5 is left alone.

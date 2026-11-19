@@ -29,7 +29,13 @@ By: lead-auto
 Status: pending-review
 ```
 
-   Number it with `ship-auto next`. Pick the safest, most reversible choice;
+   Number it with `ship-auto next`. Only a ruling about what ships is
+   written: scope, behaviour, an interface, a convention for later work, a
+   deferred item. A choice that only steers how a unit runs and leaves no
+   trace in what ships (another round, a bigger budget, a model or effort
+   change, a restart, a retry) is not a ruling: make it and carry on. The
+   file is the record the operator reads later; operational noise buries the
+   rulings that matter. Pick the safest, most reversible choice;
    when two are equal, the one that keeps scope smaller. A ruling that would
    delete data, spend money, publish, or touch another repo is not yours:
    record a **deferred item** and carry on with other work. A deferred item
@@ -47,36 +53,32 @@ Status: pending-review
    "Overturn" when there are none. Exit 3 means nothing is pending: say so and
    delete `notes/auto.json`. `ship-auto on` keeps an existing `notes/auto.json`,
    so turning it on twice does not move `first_ruling`.
-2. Triage before building anything. The file holds every ruling since
-   `first_ruling`, often days of work, and the operator can only act on the
-   ones that still govern something. Read each one. It stays on the sheet
-   when it sets a convention or expectation for work still to come, when it
-   is a deferred item still open, or when the lead (not the operator) made a
-   choice whose effect is still in place and can be undone or redone: an open
-   PR, a lock on a record, a setting. It comes off when it transcribes an
-   operator instruction, records what happened (a finding, a measurement, a
-   step that ran and landed), was replaced by a later ruling, or belongs to a
-   unit that landed, so its choices are now code a bead would change. In
-   doubt, keep it on. Drop the rest from the file:
-   ```bash
-   jq --arg off 'D12 D15' '(.groups[].questions) |= map(select(.id | IN($off | split(" ")[]) | not))' q.json > sheet.json
-   ```
-   Then rewrite `intro` (how many are on the sheet, where the rest are) and
-   the `summary` of any kept ruling a dropped one amended, so the sheet shows
-   what is in force, in words a reader without the chat can follow.
-3. With papiro available (the `papiro` skill), build and publish the sheet
-   from that file as the skill says (`build.mjs`, then publish the HTML).
-   Send the link, one line per dropped ruling (id, what it recorded) and the
-   operator's outstanding actions from the deferred items, then stop. The
-   operator pastes the reply. Dropped rulings are confirmed by `apply` like
-   any ruling the reply does not name; to object to one, the operator adds a
-   `D<n>: <answer>` line to the reply. When nothing is left for the sheet,
-   send the dropped list alone and ask for `ok`; apply
-   `Auto rulings review: all N as suggested.` on that.
-4. Without papiro, run `ship-auto questions --markdown` and print only the
-   kept rulings. The operator replies with `D<n>: <new answer>` for each
-   ruling they disagree with, or `D<n>: ok` (or `D<n>: Keep the ruling`).
-   Rulings not named are confirmed.
+2. Triage. The sheet is for the rulings that still need the operator; the
+   rulings file is the full record and they can read it any time. Keep a
+   ruling on the sheet when it is a deferred item still open, or a choice
+   about what ships that is still in force and still the operator's to
+   change: a convention for work to come, an open PR, a setting. Leave it off
+   when it records what happened (a finding, a step that ran), transcribes an
+   operator instruction, was replaced by a later ruling, or only steered how a
+   unit ran. In doubt, keep it on. Rebuild the file without the rest:
+   `ship-auto questions --drop "D12 D15" --out <file>`. Rulings left off stay
+   pending and `apply` confirms them like any ruling the reply does not name.
+   Exit 4 means every ruling was left off: run `ship-auto apply -` with
+   `Auto rulings review: all <number pending> as suggested.`, tell the
+   operator in one line, and skip to step 6. Keep the sheet's `title`
+   (`apply` refuses a reply under another title); you may rewrite `intro` to
+   say how many are on it and where the file is, and the `summary` of a kept
+   ruling a dropped one amended.
+3. With papiro available (the `papiro` skill), build and publish the sheet as
+   that skill says (`build.mjs` on the file, then publish the HTML). Send the
+   link, one line saying how many rulings were left off and the rulings file
+   path, and stop. The operator pastes the reply.
+4. Without papiro, run `ship-auto questions --markdown` with the same
+   `--drop` and print its output as is, followed by the same one line. The
+   operator replies with `D<n>: <new answer>` for each ruling they disagree
+   with, or `D<n>: ok` (or `D<n>: Keep the ruling`). Rulings not named are
+   confirmed. In either reply, a `D<n>: <what to do instead>` line overturns
+   a ruling left off the sheet.
 5. Run `${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-auto apply <reply file>`
    (or `-` for stdin). Each ruling becomes `confirmed`, or `overturned (by
    D<m>)` with a new `By: operator`, `Status: binding` ruling appended. It
@@ -93,7 +95,8 @@ Status: pending-review
 ## Do not
 
 - Ask the operator anything while auto is on.
-- Rule without writing the ruling.
+- Rule on what ships without writing the ruling: the file is how the
+  operator finds out later.
 - Edit a ruling's status by hand; `apply` owns that.
-- Put a ruling the operator can no longer change on the sheet; that is a
-  line in the chat.
+- Put a ruling on the sheet that no longer needs the operator: every extra
+  question costs their attention and hides the ones that matter.
