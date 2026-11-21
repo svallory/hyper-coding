@@ -111,18 +111,24 @@ unit_base() {
   ship_resolve_base "" "$sd" "$root"
 }
 
-# base_gone_reason <wt> <base> — why the unit's base branch is no longer live, on stdout: gone on
-# origin, or its PR merged. A base that merely sits inside the default branch is still live (a long-lived
-# branch such as main under a develop default), so it is never retargeted. Returns 1 while it is live (or when
-# the remote cannot be asked: today's behaviour is kept).
+# base_gone_reason <wt> <base> <def> — why the unit's base branch is no longer live, on stdout: gone on origin, or
+# its PR merged into <def> (the default branch the unit would move to) at the commit origin/<base> still points at.
+# A long-lived branch (dev) has merged PRs of its own (a release dev -> staging) and keeps moving: gh pr view <branch>
+# returns its newest PR, so MERGED alone does not mean the base landed. The PR's target must be <def> and the branch
+# must not have moved since. A base that merely sits inside the default branch is still live (a long-lived branch
+# such as main under a develop default), so it is never retargeted. Returns 1 while it is live (or when the remote or
+# gh cannot be asked: today's behaviour is kept).
 base_gone_reason() {
-  local wt="$1" base="$2" rc=0 st
-  git -C "$wt" ls-remote --exit-code --heads origin "refs/heads/$base" >/dev/null 2>&1 || rc=$?
+  local wt="$1" base="$2" def="${3:-}" rc=0 tip st state oid into
+  tip="$(git -C "$wt" ls-remote --exit-code --heads origin "refs/heads/$base" 2>/dev/null)" || rc=$?
   if [[ $rc -eq 2 ]]; then echo "origin/$base no longer exists"; return 0; fi
   [[ $rc -eq 0 ]] || return 1
-  st="$(cd -- "$wt" && gh pr view "$base" --json state -q .state 2>/dev/null)" || st=""
-  if [[ "$st" == MERGED ]]; then echo "the PR of $base is merged"; return 0; fi
-  return 1
+  tip="${tip%%[[:space:]]*}"
+  st="$(cd -- "$wt" && gh pr view "$base" --json state,headRefOid,baseRefName \
+    -q '[.state, .headRefOid, .baseRefName] | join(" ")' 2>/dev/null)" || st=""
+  read -r state oid into <<<"$st" || true
+  [[ "$state" == MERGED && -n "$tip" && "$oid" == "$tip" && -n "$def" && "$into" == "$def" ]] || return 1
+  echo "the PR of $base is merged into $def"
 }
 
 # retarget_point <wt> <base> <base_sha> — where the unit's own commits start, on stdout: the later of the fork
@@ -576,7 +582,7 @@ head0="$(git -C "$wt_path" rev-parse HEAD)"
 # merge made different from the ones on the default branch.
 old_base="" up=""
 def="$(ship_default_branch "$wt_path" 2>/dev/null)" || def=""
-if [[ -n "$def" && "$def" != "$base" ]] && why="$(base_gone_reason "$wt_path" "$base")"; then
+if [[ -n "$def" && "$def" != "$base" ]] && why="$(base_gone_reason "$wt_path" "$base" "$def")"; then
   up="$(retarget_point "$wt_path" "$base" "$(jq -r '.base_sha // ""' "$loop_dir/unit.json" 2>/dev/null || true)")" \
     || refuse "$why, so $branch should move to $def, but where it forked from $base is unknown; run: git rebase --onto origin/$def <fork point> $branch, then gh pr edit $pr --base $def"
   old_base="$base" base="$def"

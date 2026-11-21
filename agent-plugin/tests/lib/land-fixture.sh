@@ -69,6 +69,12 @@ case "$1 $2" in
         # GH_AUTOMERGE: an OPEN PR with auto-merge enabled
         am=null; [[ -z "${GH_AUTOMERGE:-}" || "$st" != OPEN ]] || am='{"enabledBy":{"login":"op"},"mergeMethod":"REBASE"}'
         printf '{"state":"%s","autoMergeRequest":%s,"mergeStateStatus":"%s","url":"https://github.com/acme/stub/pull/%s"}\n' "$st" "$am" "${GH_MSS:-CLEAN}" "${GH_PR:-1}" ;;
+      *baseRefName*)
+        # a base's own PR: "<state> <head it merged at> <its target>". The head is the merged-<name> marker when it
+        # holds a SHA, else the branch tip; the target is base-<name> on the remote when present, else main
+        oid="$(cat "$STUB_REMOTE/merged-$b" 2>/dev/null)"; [[ -n "$oid" ]] || oid="$(git -C "$STUB_REMOTE" rev-parse "refs/heads/$b" 2>/dev/null)"
+        into="$(cat "$STUB_REMOTE/base-$b" 2>/dev/null)"; [[ -n "$into" ]] || into=main
+        echo "$st $oid $into" ;;
       *headRefOid*)
         # GH_HEADOID_FAIL: only this query fails
         [[ -z "${GH_HEADOID_FAIL:-}" ]] || { echo "gh: HTTP 502 (stub)" >&2; exit 1; }

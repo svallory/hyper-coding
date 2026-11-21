@@ -3,6 +3,15 @@
 Changes to the hyper agent plugin. The plugin version in
 `.claude-plugin/plugin.json` is bumped separately, at release.
 
+## Unreleased
+
+### Fixed
+
+- `ship-land` no longer retargets a unit off a long-lived base (`dev`) that has an
+  old merged PR of its own (a `dev` -> `staging` release). A base counts as landed
+  only when its PR merged into the default branch and the branch still points at
+  the head that PR merged (hyper-5to).
+
 ## 0.8.1 — 2026-10-30
 
 ### Added
