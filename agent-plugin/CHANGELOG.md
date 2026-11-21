@@ -3,7 +3,19 @@
 Changes to the hyper agent plugin. The plugin version in
 `.claude-plugin/plugin.json` is bumped separately, at release.
 
-## Unreleased
+## 0.8.2 — 2026-11-21
+
+### Changed
+
+- `auto off` puts only the rulings that still need the operator on the review
+  sheet: open deferred items and choices about what ships that are still
+  theirs to change. The rulings file stays the full record. New
+  `ship-auto questions --drop "D12 D15"` leaves rulings off the papiro JSON
+  and the markdown list; they stay pending and `apply` confirms them like any
+  ruling the reply does not name (exit 1 for an id that is not pending, exit 4
+  when every ruling is left off).
+- `auto on` no longer writes operational choices as rulings (another round, a
+  bigger budget, a model or effort change, a restart, a retry).
 
 ### Fixed
 
